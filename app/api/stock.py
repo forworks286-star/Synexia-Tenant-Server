@@ -12,8 +12,9 @@ from ..services.fefo_service import verifier_fefo, FefoViolationError
 
 router = APIRouter()
 
-@router.get("/scan/{qr_code}")
-def scan_produit(qr_code: str, db: Session = Depends(get_db)):
+@router.post("/scan")
+def scan_produit(data: dict, db: Session = Depends(get_db)):
+    qr_code = data.get("qr_code", "")
     """مسح QR - الخطوة الإلزامية الأولى، لا بحث نصي مسموح"""
     produit = db.query(Produit).filter(Produit.qr_code == qr_code).first()
     if not produit:
@@ -39,7 +40,7 @@ class MouvementRequest(BaseModel):
     source_device: str  # kiosk | mobile | desktop
 
 
-@router.post("/mouvement")
+@router.post("/mouvements")
 def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db)):
     """
     تسجيل حركة - يطبّق كل القيود: FEFO + الصورة الإلزامية حسب tenant_config
