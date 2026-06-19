@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel
 
 from ..core.database import get_db
@@ -8,7 +8,6 @@ from ..core.security import create_token
 from ..models.users import User
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"])
 
 class LoginRequest(BaseModel):
     username: str
@@ -21,17 +20,19 @@ class PinLoginRequest(BaseModel):
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     """دخول عادي - يُستخدم في Mobile و Desktop"""
     user = db.query(User).filter(User.username == req.username).first()
-    if not user or not pwd_context.verify(req.password, user.password_hash):
+    if not user or not bcrypt.checkpw(req.password.encode(), user.password_hash.encode()):
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     token = create_token({"sub": str(user.id), "role": user.role, "permissions": user.permissions})
     return {
-        "access": token,
-        "user": {
-            "id": user.id, "full_name": user.full_name, "username": user.username,
-            "role": user.role, "permissions": user.permissions,
-        }
+    "access": token,
+    "refresh": token,
+    "user": {
+        "id": user.id, "full_name": user.full_name, "username": user.username,
+        "role": user.role, "permissions": user.permissions,
     }
+}
+
 
 @router.post("/login-pin")
 def login_pin(req: PinLoginRequest, db: Session = Depends(get_db)):
