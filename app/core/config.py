@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # قاعدة البيانات
-    DATABASE_URL: str = "postgresql://synexia:synexia123@localhost:5432/synexia_db"
+    DATABASE_URL: str = "postgresql://synexia:synexia1234@localhost:5432/synexia_db"
 
     # الأمان (سيُستبدل بمفاتيح فريق Cyber-Sécurité لاحقاً)
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION"
