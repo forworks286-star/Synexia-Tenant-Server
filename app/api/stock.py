@@ -82,4 +82,13 @@ def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db)):
     )
     db.add(mouvement)
     db.commit()
+
     return {"status": "ok", "nouvelle_quantite_lot": lot.quantite}
+    
+@router.get("/mouvements")
+def get_mouvements(limit: int = 50, db: Session = Depends(get_db)):
+    return {"results": [{"id": m.id, "product_id": m.produit_id, "product_name": "", "type": "entry" if m.type == "entree" else "exit", "quantity": m.quantite, "date": str(m.timestamp), "user_name": ""} for m in db.query(Mouvement).limit(limit).all()]}
+    
+@router.get("/produits")
+def get_produits(db: Session = Depends(get_db)):
+    return {"results": [{"id": p.id, "name": p.nom, "qr_reference": p.qr_code, "stock_quantity": sum(l.quantite for l in p.lots), "alert_threshold": p.seuil_critique, "supplier_name": None, "supplier_id": p.fournisseur_id} for p in db.query(Produit).all()]}
