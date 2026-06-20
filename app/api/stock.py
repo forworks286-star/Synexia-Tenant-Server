@@ -17,15 +17,17 @@ router = APIRouter()
 def get_produits(db: Session = Depends(get_db)):
     return {"results": [
         {
-            "id": p.id, "sku": p.sku, "name": p.nom, "categorie": p.categorie,
-            "qr_reference": p.qr_code, "code_barre": p.code_barre,
-            "unite_mesure": p.unite_mesure,
-            "stock_quantity": sum(l.quantite for l in p.lots),
-            "alert_threshold": p.seuil_critique,
-            "prix_achat": p.prix_achat, "prix_vente": p.prix_vente,
-            "supplier_name": p.fournisseur.nom if p.fournisseur else None,
-            "supplier_id": p.fournisseur_id,
-        } for p in db.query(Produit).all()
+    "id": p.id, "sku": p.sku, "name": p.nom, "categorie": p.categorie,
+    "qr_reference": p.qr_code, "code_barre": p.code_barre,
+    "unite_mesure": p.unite_mesure,
+    "pays_origine": p.pays_origine,
+    "statut_produit": p.statut_produit,
+    "stock_quantity": sum(l.quantite for l in p.lots),
+    "alert_threshold": p.seuil_critique,
+    "prix_achat": p.prix_achat, "prix_vente": p.prix_vente,
+    "supplier_name": p.fournisseur.nom if p.fournisseur else None,
+    "supplier_id": p.fournisseur_id,
+} for p in db.query(Produit).all()
     ]}
 
 
