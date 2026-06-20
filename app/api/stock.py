@@ -22,7 +22,9 @@ def get_produits(db: Session = Depends(get_db)):
     "unite_mesure": p.unite_mesure,
     "pays_origine": p.pays_origine,
     "statut_produit": p.statut_produit,
-    "stock_quantity": sum(l.quantite for l in p.lots),
+    "stock_physique": sum(l.quantite_physique for l in p.lots),
+    "stock_disponible": sum(l.quantite_disponible for l in p.lots),
+    "stock_reserve": sum(l.quantite_reservee for l in p.lots),
     "alert_threshold": p.seuil_critique,
     "prix_achat": p.prix_achat, "prix_vente": p.prix_vente,
     "supplier_name": p.fournisseur.nom if p.fournisseur else None,
@@ -39,9 +41,10 @@ def scan_produit(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="error_not_found")
 
     lots = [
-        {"id": l.id, "quantite": l.quantite, "date_expiration": l.date_expiration, "emplacement": l.emplacement}
-        for l in produit.lots if l.quantite > 0
-    ]
+    {"id": l.id, "quantite_physique": l.quantite_physique, "quantite_disponible": l.quantite_disponible,
+     "date_expiration": l.date_expiration, "emplacement": l.emplacement}
+    for l in produit.lots if l.quantite_physique > 0
+]
     return {
         "id": produit.id, "sku": produit.sku, "nom": produit.nom, "qr_code": produit.qr_code,
         "champs_extra": produit.champs_extra, "lots": lots,
@@ -75,13 +78,13 @@ def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db)):
             )
 
     lot = db.query(Lot).filter(Lot.id == req.lot_id).first()
-    if not lot or (lot.quantite < req.quantite and req.type == "sortie"):
-        raise HTTPException(status_code=400, detail="error_insufficient_stock")
+if not lot or (lot.quantite_disponible < req.quantite and req.type == "sortie"):
+    raise HTTPException(status_code=400, detail="error_insufficient_stock")
 
-    if req.type == "entree":
-        lot.quantite += req.quantite
-    else:
-        lot.quantite -= req.quantite
+if req.type == "entree":
+    lot.quantite_physique += req.quantite
+else:
+    lot.quantite_physique -= req.quantite
 
     mouvement = Mouvement(
         produit_id=req.produit_id, lot_id=req.lot_id, type=req.type,
