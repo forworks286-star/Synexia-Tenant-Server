@@ -17,11 +17,11 @@ def verifier_fefo(db: Session, produit_id: int, lot_id_demande: int, tenant_conf
         return  # المستودع لا يستخدم FEFO (قطع غيار مثلاً) - لا قيد
 
     lots_disponibles = (
-        db.query(Lot)
-        .filter(Lot.produit_id == produit_id, Lot.quantite > 0, Lot.date_expiration.isnot(None))
-        .order_by(Lot.date_expiration.asc())
-        .all()
-    )
+    db.query(Lot)
+    .filter(Lot.produit_id == produit_id, Lot.quantite_physique > 0, Lot.date_expiration.isnot(None))
+    .order_by(Lot.date_expiration.asc())
+    .all()
+)
 
     if not lots_disponibles:
         return  # لا توجد دفعات بتاريخ انتهاء لهذا المنتج
