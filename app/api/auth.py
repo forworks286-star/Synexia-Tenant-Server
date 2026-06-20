@@ -18,10 +18,10 @@ class PinLoginRequest(BaseModel):
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """دخول عادي - يُستخدم في Mobile و Desktop"""
-    user = db.query(User).filter(User.username == req.username).first()
-    if not user or not bcrypt.checkpw(req.password.encode(), user.password_hash.encode()):
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+   """Connexion standard - utilisée par Mobile et Desktop"""
+user = db.query(User).filter(User.username == req.username).first()
+if not user or not bcrypt.checkpw(req.password.encode(), user.password_hash.encode()):
+    raise HTTPException(status_code=401, detail="error_auth")
 
     token = create_token({"sub": str(user.id), "role": user.role, "permissions": user.permissions})
     return {
