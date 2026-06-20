@@ -48,7 +48,13 @@ class Lot(Base):
 
     id = Column(Integer, primary_key=True)
     produit_id = Column(Integer, ForeignKey("produits.id"), nullable=False)
-    quantite = Column(Integer, default=0)
+
+    quantite_physique = Column(Integer, default=0)
+    quantite_reservee = Column(Integer, default=0)
+
+    @property
+    def quantite_disponible(self):
+        return self.quantite_physique - self.quantite_reservee
 
     date_fabrication = Column(Date, nullable=True)
     date_expiration = Column(Date, nullable=True)
