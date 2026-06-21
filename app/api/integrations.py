@@ -10,7 +10,7 @@ from ..models.factures import Facture
 
 router = APIRouter()
 
-# ── من فريق IA/Vision - كاميرات الأمان ──
+# ── Depuis Pôle IA/Vision - caméras de sécurité ──
 class CameraEventRequest(BaseModel):
     camera_id: str
     type: str
@@ -20,7 +20,7 @@ class CameraEventRequest(BaseModel):
 
 @router.post("/camera-event")
 def recevoir_camera_event(req: CameraEventRequest, db: Session = Depends(get_db)):
-    """Endpoint جاهز - فريق IA يستدعيه عند أي حدث كاميرا"""
+    """Endpoint prêt - appelé par l'équipe IA lors de tout événement caméra"""
     event = CameraEvent(
         camera_id=req.camera_id, type=req.type, zone=req.zone,
         video_clip_url=req.video_clip_url, raw_data=req.raw_data,
@@ -31,7 +31,7 @@ def recevoir_camera_event(req: CameraEventRequest, db: Session = Depends(get_db)
     return {"status": "received", "id": event.id}
 
 
-# ── من فريق IA - نتائج OCR الفواتير ──
+# ── Depuis Pôle IA - résultats OCR des factures ──
 class OcrResultRequest(BaseModel):
     fournisseur_nom: str
     date: str
@@ -44,7 +44,7 @@ class OcrResultRequest(BaseModel):
 
 @router.post("/ocr-result")
 def recevoir_resultat_ocr(req: OcrResultRequest, db: Session = Depends(get_db)):
-    """Endpoint جاهز - فريق IA يرسل نتيجة قراءة الفاتورة هنا، بأي صيغة JSON إضافية"""
+    """Endpoint prêt - l'équipe IA envoie le résultat de lecture de facture ici, dans n'importe quel format JSON"""
     incoherence = abs((req.montant_ht + req.montant_tva) - req.montant_ttc) > 0.01
 
     facture = Facture(
@@ -58,7 +58,7 @@ def recevoir_resultat_ocr(req: OcrResultRequest, db: Session = Depends(get_db)):
     return {"status": "received", "id": facture.id, "incoherence_detectee": incoherence}
 
 
-# ── من فريق Automatique/IoT - بيانات الطاقة ──
+# ── Depuis Pôle Automatique/IoT - données énergétiques ──
 class EnergieLogRequest(BaseModel):
     zone: str
     consommation_kwh: str
@@ -67,7 +67,7 @@ class EnergieLogRequest(BaseModel):
 
 @router.post("/energie-log")
 def recevoir_log_energie(req: EnergieLogRequest, db: Session = Depends(get_db)):
-    """Endpoint جاهز - فريق IoT يرسل بيانات الطاقة هنا"""
+    """Endpoint prêt - l'équipe IoT envoie les données énergétiques ici"""
     log = EnergieLog(
         zone=req.zone, consommation_kwh=req.consommation_kwh,
         mode=req.mode, raw_data=req.raw_data, timestamp=datetime.utcnow(),

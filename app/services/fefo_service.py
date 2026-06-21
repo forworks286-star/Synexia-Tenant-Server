@@ -3,18 +3,18 @@ from datetime import date
 from ..models.produits import Lot
 
 class FefoViolationError(Exception):
-    """يُرفع حين يحاول العامل سحب من دفعة خاطئة"""
+    """Levée quand l'agent tente de prélever sur un mauvais lot"""
     def __init__(self, lot_correct: Lot):
         self.lot_correct = lot_correct
         super().__init__("FEFO violation")
 
 def verifier_fefo(db: Session, produit_id: int, lot_id_demande: int, tenant_config) -> None:
     """
-    يُستدعى قبل كل سحب من المخزون - إذا كان module_fefo مفعّل فقط
-    يرفض السحب من دفعة بعيدة إذا توجد دفعة أقرب انتهاءً
+    Appelée avant chaque sortie de stock - uniquement si module_fefo est activé.
+    Refuse le prélèvement sur un lot éloigné s'il existe un lot avec une date plus proche.
     """
     if not tenant_config.module_fefo:
-        return  # المستودع لا يستخدم FEFO (قطع غيار مثلاً) - لا قيد
+        return  # L'entrepôt n'utilise pas FEFO (pièces détachées par exemple) - aucune contrainte
 
     lots_disponibles = (
     db.query(Lot)
@@ -24,9 +24,9 @@ def verifier_fefo(db: Session, produit_id: int, lot_id_demande: int, tenant_conf
 )
 
     if not lots_disponibles:
-        return  # لا توجد دفعات بتاريخ انتهاء لهذا المنتج
+        return  # Aucun lot avec date de péremption pour ce produit
 
-    lot_correct = lots_disponibles[0]  # الأقرب انتهاءً يجب أن يُسحب أولاً
+    lot_correct = lots_disponibles[0]  # Le lot le plus proche doit être prélevé en premier
 
     if lot_correct.id != lot_id_demande:
         raise FefoViolationError(lot_correct)

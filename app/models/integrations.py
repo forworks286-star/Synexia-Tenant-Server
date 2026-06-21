@@ -3,7 +3,7 @@ from ..core.database import Base
 
 class CameraEvent(Base):
     """
-    يملؤه فريق IA/Vision عبر API - نحن لا نولّد هذه البيانات
+    Rempli par l'équipe IA/Vision via API - nous ne générons pas ces données
     """
     __tablename__ = "camera_events"
 
@@ -13,12 +13,12 @@ class CameraEvent(Base):
     zone = Column(String, nullable=True)
     timestamp = Column(DateTime, nullable=False)
     video_clip_url = Column(String, nullable=True)
-    raw_data = Column(JSON, default=dict)  # مرن لأي صيغة يرسلها فريق IA
+    raw_data = Column(JSON, default=dict)  # flexible pour tout format envoyé par l'équipe IA
 
 
 class EnergieLog(Base):
     """
-    يملؤه فريق Automatique/IoT عبر API
+    Rempli par l'équipe Automatique/IoT via API
     """
     __tablename__ = "energie_logs"
 

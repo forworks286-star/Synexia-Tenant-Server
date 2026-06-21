@@ -3,8 +3,8 @@ from .core.config import settings
 
 def verifier_licence_au_demarrage() -> bool:
     """
-    يُستدعى مرة عند بدء تشغيل السيرفر، ثم كل 24 ساعة
-    إن فشل الاتصال بسيرفر الترخيص (لا إنترنت)، يسمح بالعمل (Grace period)
+    Appelée une fois au démarrage du serveur, puis toutes les 24 heures.
+    Si la connexion au serveur de licence échoue (pas d'internet), autorise le fonctionnement (Grace period).
     """
     try:
         response = httpx.post(
@@ -15,4 +15,4 @@ def verifier_licence_au_demarrage() -> bool:
         data = response.json()
         return data.get("valid", False)
     except httpx.RequestError:
-        return True  # لا إنترنت = لا نوقف عمل الزبون، Grace period تلقائي
+        return True  # Pas d'internet = ne pas bloquer le client, Grace period automatique
