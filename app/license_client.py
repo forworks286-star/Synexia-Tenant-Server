@@ -1,18 +1,19 @@
 import httpx
 from .core.config import settings
 
-def verifier_licence_au_demarrage() -> bool:
+
+async def verifier_licence_au_demarrage() -> bool:
     """
-    Appelée une fois au démarrage du serveur, puis toutes les 24 heures.
-    Si la connexion au serveur de licence échoue (pas d'internet), autorise le fonctionnement (Grace period).
+    Called once at server startup.
+    Returns False if license invalid — server refuses to start.
+    Returns True if no internet — grace period, client not blocked.
     """
     try:
-        response = httpx.post(
-            f"{settings.LICENSE_SERVER_URL}/verify",
-            json={"license_key": settings.LICENSE_KEY},
-            timeout=5.0,
-        )
-        data = response.json()
-        return data.get("valid", False)
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{settings.LICENSE_SERVER_URL}/verify",
+                json={"license_key": settings.LICENSE_KEY},
+            )
+        return response.json().get("valid", False)
     except httpx.RequestError:
-        return True  # Pas d'internet = ne pas bloquer le client, Grace period automatique
+        return True
