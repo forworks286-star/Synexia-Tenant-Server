@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.security import get_current_user, require_permission
+from ..core.security import get_current_user, require_role
 from ..models.factures import Facture
 from ..services.audit_service import enregistrer_audit
 
@@ -33,7 +33,7 @@ def get_factures(page: int = 1, limit: int = 50,
 
 @router.put("/{facture_id}/valider")
 def valider(facture_id: int, db: Session = Depends(get_db),
-            current_user=Depends(require_permission("valider_facture"))):
+            current_user=Depends(require_role("admin", "manager"))):
     f = db.query(Facture).filter(Facture.id == facture_id).first()
     if not f:
         raise HTTPException(status_code=404, detail="error_not_found")
@@ -46,7 +46,7 @@ def valider(facture_id: int, db: Session = Depends(get_db),
 
 @router.put("/{facture_id}/rejeter")
 def rejeter(facture_id: int, db: Session = Depends(get_db),
-            current_user=Depends(require_permission("valider_facture"))):
+            current_user=Depends(require_role("admin", "manager"))):
     f = db.query(Facture).filter(Facture.id == facture_id).first()
     if not f:
         raise HTTPException(status_code=404, detail="error_not_found")
