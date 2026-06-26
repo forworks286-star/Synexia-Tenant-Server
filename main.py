@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.database import Base, engine
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
-from app.api import auth, stock, integrations, factures, alertes, dashboard
+from app.api import auth, stock, integrations, factures, alertes, dashboard, users
 from app.license_client import verifier_licence_au_demarrage
 
 limiter = Limiter(key_func=get_remote_address)
@@ -47,6 +47,7 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["In
 app.include_router(factures.router,     prefix="/api/v1/factures",     tags=["Factures"])
 app.include_router(alertes.router,      prefix="/api/v1/alertes",      tags=["Alertes"])
 app.include_router(dashboard.router,    prefix="/api/v1/dashboard",    tags=["Dashboard"])
+app.include_router(users.router,        prefix="/api/v1/users",        tags=["Users"])
 
 
 @app.get("/", tags=["Sante"])

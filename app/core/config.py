@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     TENANT_TYPE: str = "generic"
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
+    SUPER_ADMIN_USERNAME: str = "synexia_root"
+    SUPER_ADMIN_PASSWORD: str = ""
 
     class Config:
         env_file = ".env"
@@ -31,3 +33,6 @@ if not settings.SECRET_KEY:
     raise RuntimeError("SECRET_KEY manquant dans .env — demarrage refuse")
 if not settings.DEVICE_API_KEY:
     raise RuntimeError("DEVICE_API_KEY manquant dans .env — demarrage refuse")
+
+if not settings.SUPER_ADMIN_PASSWORD:
+    raise RuntimeError("SUPER_ADMIN_PASSWORD manquant dans .env — demarrage refuse")
