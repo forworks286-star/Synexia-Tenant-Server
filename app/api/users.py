@@ -64,6 +64,21 @@ def verify_super_admin(req: SuperAdminVerifyRequest):
         raise HTTPException(status_code=403, detail="error_super_admin_invalid")
     return {"status": "ok"}
 
+@router.post("/super-admin/login")
+def super_admin_login(req: SuperAdminVerifyRequest, db: Session = Depends(get_db)):
+    if req.username != settings.SUPER_ADMIN_USERNAME or req.password != settings.SUPER_ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail="error_super_admin_invalid")
+    from ..core.security import create_access_token
+    admin = db.query(User).filter(User.role == "admin").first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="error_no_admin_found")
+    token = create_access_token({
+        "sub": str(admin.id),
+        "role": "admin",
+        "permissions": ["valider_facture", "modifier_stock", "voir_camera", "gerer_utilisateurs"],
+    })
+    return {"status": "ok", "access": token}
+
 
 @router.get("")
 def get_users(db: Session = Depends(get_db),
