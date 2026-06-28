@@ -130,6 +130,54 @@ def create_produit(req: ProduitCreateRequest, db: Session = Depends(get_db),
                       apres=req.model_dump())
     return {"status": "ok", "id": p.id}
 
+class FournisseurCreateRequest(BaseModel):
+    nom: str
+    contact: Optional[str] = None
+    dernier_prix: Optional[float] = None
+    delai_livraison_jours: Optional[int] = None
+
+
+@router.post("/fournisseurs")
+def create_fournisseur(req: FournisseurCreateRequest, db: Session = Depends(get_db),
+                       current_user=Depends(require_role("admin"))):
+    from ..models.produits import Fournisseur as FournisseurModel
+    f = FournisseurModel(
+        nom=req.nom, contact=req.contact,
+        dernier_prix=req.dernier_prix,
+        delai_livraison_jours=req.delai_livraison_jours,
+    )
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return {"status": "ok", "id": f.id, "nom": f.nom}
+
+
+class LotCreateRequest(BaseModel):
+    produit_id: int
+    numero_lot: Optional[str] = None
+    quantite_physique: int = 0
+    quantite_reservee: int = 0
+    statut: str = "disponible"
+    emplacement: Optional[str] = None
+
+
+@router.post("/lots")
+def create_lot(req: LotCreateRequest, db: Session = Depends(get_db),
+               current_user=Depends(require_role("admin"))):
+    lot = Lot(
+        produit_id=req.produit_id,
+        numero_lot=req.numero_lot or f"LOT-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+        quantite_physique=req.quantite_physique,
+        quantite_reservee=req.quantite_reservee,
+        statut=req.statut,
+        emplacement=req.emplacement,
+        date_entree_stock=datetime.utcnow(),
+    )
+    db.add(lot)
+    db.commit()
+    db.refresh(lot)
+    return {"status": "ok", "id": lot.id}
+
 
 class ProduitUpdateRequest(BaseModel):
     nom: Optional[str] = None
