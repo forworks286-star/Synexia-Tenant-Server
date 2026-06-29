@@ -104,6 +104,7 @@ class ProduitCreateRequest(BaseModel):
     unite_mesure: str = "piece"
     pays_origine: Optional[str] = None
     prix_achat: float = 0.0
+    prix_moyen_pondere: float = 0.0
     prix_vente: float = 0.0
     taux_tva: float = 19.0
     devise: str = "DZD"
@@ -121,7 +122,10 @@ def create_produit(req: ProduitCreateRequest, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="error_sku_exists")
     if db.query(Produit).filter(Produit.qr_code == req.qr_code).first():
         raise HTTPException(status_code=409, detail="error_qr_exists")
-    p = Produit(**req.model_dump(), cree_par_id=current_user.id, date_creation=datetime.utcnow())
+    data = req.model_dump()
+    if not data.get('prix_moyen_pondere') or data['prix_moyen_pondere'] == 0:
+        data['prix_moyen_pondere'] = data.get('prix_achat', 0)
+    p = Produit(**data, cree_par_id=current_user.id, date_creation=datetime.utcnow())
     db.add(p)
     db.commit()
     db.refresh(p)

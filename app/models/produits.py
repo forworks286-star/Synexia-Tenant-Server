@@ -30,8 +30,7 @@ class Produit(Base):
 
     # International / Conformité
     pays_origine = Column(String, nullable=True)
-    statut_produit = Column(String, default="actif")  # actif | bloque | obsolete | en_test
-
+    statut_produit = Column(String, default="actif")  
     # Optimisation (KPIs)
     seuil_critique = Column(Integer, default=10)
     stock_securite = Column(Integer, default=0)
@@ -72,7 +71,7 @@ class Lot(Base):
     quantite_physique = Column(Integer, default=0)
     quantite_reservee = Column(Integer, default=0)
 
-    statut = Column(String, default="disponible")  # disponible | quarantaine | defaut | endommage
+    statut = Column(String, default="disponible")  
 
     date_fabrication = Column(Date, nullable=True)
     date_expiration = Column(Date, nullable=True)
