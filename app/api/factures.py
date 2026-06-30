@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -11,16 +12,20 @@ router = APIRouter()
 
 @router.get("")
 def get_factures(page: int = 1, limit: int = 50,
+                 type_facture: Optional[str] = None,
                  db: Session = Depends(get_db),
                  current_user=Depends(get_current_user)):
-    total = db.query(Facture).count()
-    factures = db.query(Facture).offset((page - 1) * limit).limit(limit).all()
+    query = db.query(Facture)
+    if type_facture:
+        query = query.filter(Facture.type_facture == type_facture)
+    total = query.count()
+    factures = query.order_by(Facture.id.desc()).offset((page - 1) * limit).limit(limit).all()
     return {
         "total": total, "page": page, "limit": limit,
         "results": [
             {
                 "id": f.id, "supplier_name": f.fournisseur_nom,
-                "date": str(f.date),
+                "date": str(f.date), "type_facture": f.type_facture,
                 "amount_ht": f.montant_ht, "amount_tva": f.montant_tva,
                 "amount_ttc": f.montant_ttc, "ppa": f.ppa,
                 "status": f.statut, "photo_url": f.image_url,

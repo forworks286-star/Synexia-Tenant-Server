@@ -17,6 +17,7 @@ class Facture(Base):
     ppa = Column(Float, nullable=True)  # Prix Public Algérien - pharmacies uniquement
 
     statut = Column(String, default="pending")  # pending | validated | rejected
+    type_facture = Column(String, default="achat")  # achat | vente
     image_url = Column(String, nullable=True)
 
     # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
