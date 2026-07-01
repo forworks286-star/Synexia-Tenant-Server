@@ -252,6 +252,7 @@ async def recevoir_automation_event(
 def get_automation_events(
     module: Optional[str] = None,
     zone_id: Optional[str] = None,
+    has_alarm: Optional[bool] = None,
     limit: int = 50,
     db: Session = Depends(get_db),
     _=Depends(verify_device_key),
@@ -261,6 +262,10 @@ def get_automation_events(
         query = query.filter(AutomationEvent.module == module)
     if zone_id:
         query = query.filter(AutomationEvent.zone_id == zone_id)
+    
+    if has_alarm is not None:
+        query = query.filter(AutomationEvent.has_alarm == has_alarm)
+        
     events = query.limit(limit).all()
     return {"results": [
         {
