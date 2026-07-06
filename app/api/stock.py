@@ -253,7 +253,7 @@ class MouvementRequest(BaseModel):
 
 
 @router.post("/mouvements")
-def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db),
+async def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db),
                            current_user=Depends(get_current_user)):
     config = db.query(TenantConfig).first()
     if config and config.module_photo_obligatoire and not req.photo_preuve_url:
@@ -295,6 +295,12 @@ def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get_db),
                       apres={"quantite_physique": lot.quantite_physique},
                       source_device=req.source_device)
     return {"status": "ok", "nouvelle_quantite_lot": lot.quantite_physique}
+
+    await ws_manager.broadcast({
+        "type": "stock_update",
+        "produit_id": req.produit_id,
+        "nouvelle_quantite": lot.quantite_physique,
+    })
 
 
 @router.get("/mouvements")

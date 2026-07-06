@@ -84,3 +84,34 @@ async def create_alerte_internal(
         "timestamp": str(alerte.timestamp),
     })
     return {"status": "ok", "id": alerte.id}
+
+
+@router.get("/active")
+def get_active_alarms(db: Session = Depends(get_db),
+                      current_user=Depends(get_current_user)):
+    from ..models.integrations import ActiveAlarm, AlarmHistory
+    now = datetime.utcnow()
+    active = db.query(ActiveAlarm).order_by(ActiveAlarm.started_at.desc()).all()
+    history = db.query(AlarmHistory).order_by(
+        AlarmHistory.resolved_at.desc()).limit(100).all()
+    return {
+        "active": [
+            {
+                "id": a.id, "device_id": a.device_id,
+                "module": a.module, "zone_id": a.zone_id,
+                "alarm_key": a.alarm_key, "niveau": a.niveau,
+                "message": a.message, "started_at": str(a.started_at),
+                "duration_minutes": int((now - a.started_at).total_seconds() / 60),
+            } for a in active
+        ],
+        "history": [
+            {
+                "id": h.id, "device_id": h.device_id,
+                "module": h.module, "zone_id": h.zone_id,
+                "alarm_key": h.alarm_key, "niveau": h.niveau,
+                "message": h.message, "started_at": str(h.started_at),
+                "resolved_at": str(h.resolved_at),
+                "duration_minutes": h.duration_minutes,
+            } for h in history
+        ],
+    }

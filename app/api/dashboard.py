@@ -71,48 +71,27 @@ def get_energie(db: Session = Depends(get_db),
 @router.get("/iot")
 def get_iot_dashboard(db: Session = Depends(get_db),
                       current_user=Depends(require_role("admin", "manager"))):
-    """Retourne le dernier état IoT connu pour chaque zone/module."""
-    from ..models.integrations import AutomationEvent
-    from sqlalchemy import func
-
-    subq = (
-        db.query(
-            AutomationEvent.zone_id,
-            AutomationEvent.module,
-            func.max(AutomationEvent.id).label("max_id"),
-        )
-        .group_by(AutomationEvent.zone_id, AutomationEvent.module)
-        .subquery()
-    )
-    events = (
-        db.query(AutomationEvent)
-        .join(subq, AutomationEvent.id == subq.c.max_id)
-        .all()
-    )
-
-    active_alarms = db.query(AutomationEvent).filter(
-        AutomationEvent.has_alarm == True
-    ).count()
-
+    from ..models.integrations import DeviceState, ActiveAlarm
+    states = db.query(DeviceState).all()
+    active_alarms_count = db.query(ActiveAlarm).count()
     return {
-        "active_alarms": active_alarms,
+        "active_alarms": active_alarms_count,
         "zones": [
             {
-                "device_id": e.device_id,
-                "module": e.module,
-                "zone_id": e.zone_id,
-                "has_alarm": e.has_alarm,
-                "timestamp": str(e.timestamp),
-                "inputs": e.payload.get("inputs", {}),
-                "outputs": e.payload.get("outputs", {}),
-                "states": e.payload.get("states", {}),
-                "lighting": e.payload.get("lighting", {}),
-                "hvac": e.payload.get("hvac", {}),
-                "energy": e.payload.get("energy", {}),
-                "alarms": e.payload.get("alarms", {}),
-                "diagnostic": e.payload.get("diagnostic", {}),
-                "maintenance": e.payload.get("maintenance", {}),
-            }
-            for e in events
+                "device_id": s.device_id,
+                "module": s.module,
+                "zone_id": s.zone_id,
+                "has_alarm": s.has_alarm,
+                "timestamp": str(s.last_updated),
+                "inputs":      s.payload.get("inputs", {}),
+                "outputs":     s.payload.get("outputs", {}),
+                "states":      s.payload.get("states", {}),
+                "lighting":    s.payload.get("lighting", {}),
+                "hvac":        s.payload.get("hvac", {}),
+                "energy":      s.payload.get("energy", {}),
+                "alarms":      s.payload.get("alarms", {}),
+                "diagnostic":  s.payload.get("diagnostic", {}),
+                "maintenance": s.payload.get("maintenance", {}),
+            } for s in states
         ],
     }

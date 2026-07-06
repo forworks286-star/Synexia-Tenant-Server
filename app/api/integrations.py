@@ -188,40 +188,78 @@ async def recevoir_automation_event(
     db: Session = Depends(get_db),
     _=Depends(verify_device_key),
 ):
-    """
-    Endpoint unique pour tous les modules de l'équipe Automatique
-    (SmartLighting, HVAC, FireSystem, AccessControl, Energy, Conveyor...).
-    Le payload complet est stocké tel quel — flexible pour tout module futur.
-    """
+    from ..models.integrations import DeviceState, ActiveAlarm, AlarmHistory
+
     data = req.automation
     header = data.header
-
     alarms = data.alarms or {}
     has_alarm = any(bool(v) for v in alarms.values())
-
     full_payload = data.model_dump()
+    now = datetime.utcnow()
 
-    event = AutomationEvent(
-        device_id=header.device_id,
-        device_name=header.device_name,
-        device_type=header.device_type,
-        controller_brand=header.controller_brand,
-        controller_model=header.controller_model,
-        module=header.module,
-        site_id=header.site_id,
-        warehouse_id=header.warehouse_id,
-        zone_id=header.zone_id,
-        line_id=header.line_id,
-        payload=full_payload,
-        has_alarm=has_alarm,
-        timestamp=datetime.utcnow(),
-        received_at=datetime.utcnow(),
-    )
-    db.add(event)
+   
+    state = db.query(DeviceState).filter(
+        DeviceState.device_id == header.device_id
+    ).first()
+    if state:
+        state.payload = full_payload
+        state.has_alarm = has_alarm
+        state.last_updated = now
+        state.module = header.module
+        state.zone_id = header.zone_id
+    else:
+        state = DeviceState(
+            device_id=header.device_id,
+            device_name=header.device_name,
+            module=header.module,
+            zone_id=header.zone_id,
+            site_id=header.site_id,
+            warehouse_id=header.warehouse_id,
+            controller_brand=header.controller_brand,
+            controller_model=header.controller_model,
+            payload=full_payload,
+            has_alarm=has_alarm,
+            last_updated=now,
+        )
+        db.add(state)
+
+
+    for key, value in alarms.items():
+        existing = db.query(ActiveAlarm).filter(
+            ActiveAlarm.device_id == header.device_id,
+            ActiveAlarm.alarm_key == key,
+        ).first()
+
+        if value and not existing:
+            niveau = "danger" if key in _CRITICAL_ALARMS else "warning"
+            label = _ALARM_LABELS.get(key, key)
+            msg = f"{label} — {header.module} — Zone: {header.zone_id or 'N/A'}"
+            db.add(ActiveAlarm(
+                device_id=header.device_id, module=header.module,
+                zone_id=header.zone_id, alarm_key=key,
+                niveau=niveau, message=msg, started_at=now,
+            ))
+            await _creer_alerte(db, type="automation", niveau=niveau,
+                                message=msg, source="automatique",
+                                meta={"device_id": header.device_id,
+                                      "module": header.module,
+                                      "zone_id": header.zone_id,
+                                      "alarm_key": key})
+
+        elif not value and existing:
+            duration = int((now - existing.started_at).total_seconds() / 60)
+            db.add(AlarmHistory(
+                device_id=existing.device_id, module=existing.module,
+                zone_id=existing.zone_id, alarm_key=existing.alarm_key,
+                niveau=existing.niveau, message=existing.message,
+                started_at=existing.started_at, resolved_at=now,
+                duration_minutes=duration,
+            ))
+            db.delete(existing)
+
     db.commit()
-    db.refresh(event)
 
-    # Diffusion temps réel de l'état complet via WebSocket
+ 
     await ws_manager.broadcast({
         "type": "automation_update",
         "module": header.module,
@@ -229,23 +267,10 @@ async def recevoir_automation_event(
         "device_id": header.device_id,
         "payload": full_payload,
         "has_alarm": has_alarm,
-        "timestamp": str(event.timestamp),
+        "timestamp": str(now),
     })
 
-    # Création d'alertes automatiques pour chaque alarme active
-    for key, value in alarms.items():
-        if value:
-            niveau = "danger" if key in _CRITICAL_ALARMS else "warning"
-            label = _ALARM_LABELS.get(key, key)
-            await _creer_alerte(
-                db, type="automation", niveau=niveau,
-                message=f"{label} — {header.module} — Zone: {header.zone_id or 'N/A'}",
-                source="automatique",
-                meta={"device_id": header.device_id, "module": header.module,
-                      "zone_id": header.zone_id, "alarm_key": key},
-            )
-
-    return {"status": "received", "id": event.id, "has_alarm": has_alarm}
+    return {"status": "received", "device_id": header.device_id, "has_alarm": has_alarm}
 
 
 @router.get("/automation-events")
