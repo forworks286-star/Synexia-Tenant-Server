@@ -71,20 +71,12 @@ async def create_alerte_internal(
     _=Depends(verify_device_key),
 ):
     """Internal endpoint — called by integration services. Protected by X-Device-Key."""
-    alerte = Alerte(
-        type=req.type, niveau=req.niveau, message=req.message,
-        source_module=req.source_module, metadata_json=req.metadata_json,
-        timestamp=datetime.utcnow(), lu=False,
+    from ..services.alertes_service import creer_alerte
+    alerte = await creer_alerte(
+        db, type=req.type, niveau=req.niveau, message=req.message,
+        source=req.source_module, meta=req.metadata_json,
     )
-    db.add(alerte)
-    db.commit()
-    await ws_manager.broadcast({
-        "id": alerte.id, "type": alerte.type, "niveau": alerte.niveau,
-        "message": alerte.message, "source_module": alerte.source_module,
-        "timestamp": str(alerte.timestamp),
-    })
     return {"status": "ok", "id": alerte.id}
-
 
 @router.get("/active")
 def get_active_alarms(db: Session = Depends(get_db),

@@ -294,13 +294,12 @@ async def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get
                       avant={"quantite_physique": avant},
                       apres={"quantite_physique": lot.quantite_physique},
                       source_device=req.source_device)
-    return {"status": "ok", "nouvelle_quantite_lot": lot.quantite_physique}
-
     await ws_manager.broadcast({
         "type": "stock_update",
         "produit_id": req.produit_id,
         "nouvelle_quantite": lot.quantite_physique,
     })
+    return {"status": "ok", "nouvelle_quantite_lot": lot.quantite_physique}
 
 
 @router.get("/mouvements")
@@ -339,6 +338,7 @@ def get_mouvements(
 @router.get("/alertes-stock")
 async def get_alertes_stock(db: Session = Depends(get_db),
                              current_user=Depends(get_current_user)):
+    from ..services.alertes_service import creer_alerte
     produits = db.query(Produit).options(
         joinedload(Produit.lots), joinedload(Produit.fournisseur)
     ).all()
@@ -361,11 +361,12 @@ async def get_alertes_stock(db: Session = Depends(get_db),
                 )
                 db.add(commande)
                 db.commit()
-                await ws_manager.broadcast({
-                    "type": "commande_auto", "niveau": "warning",
-                    "message": f"Commande auto generee — {p.nom}",
-                    "produit_id": p.id,
-                })
+                await creer_alerte(
+                    db, type="stock", niveau="warning",
+                    message=f"Commande auto generee — {p.nom}",
+                    source="stock",
+                    meta={"produit_id": p.id, "commande_id": commande.id},
+                )
             critiques.append({
                 "produit_id": p.id, "sku": p.sku, "nom": p.nom,
                 "stock_actuel": stock_total, "seuil_critique": p.seuil_critique,

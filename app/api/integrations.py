@@ -10,25 +10,10 @@ from ..core.ws_manager import ws_manager
 from ..models.integrations import CameraEvent, EnergieLog, AutomationEvent, FaceEvent
 from ..models.alertes import Alerte
 from ..models.factures import Facture
+from ..services.alertes_service import creer_alerte as _creer_alerte
+
 
 router = APIRouter()
-
-
-async def _creer_alerte(db: Session, type: str, niveau: str, message: str,
-                         source: str, meta: dict):
-    alerte = Alerte(
-        type=type, niveau=niveau, message=message,
-        source_module=source, metadata_json=meta,
-        timestamp=datetime.utcnow(), lu=False,
-    )
-    db.add(alerte)
-    db.commit()
-    await ws_manager.broadcast({
-        "id": alerte.id, "type": type, "niveau": niveau,
-        "message": message, "source_module": source,
-        "timestamp": str(alerte.timestamp),
-    })
-
 
 # ── Camera Event (équipe IA) ───────────────────────────────────
 
@@ -366,6 +351,13 @@ async def recevoir_resultat_ocr(
             source="ia_ocr",
             meta={"facture_id": facture.id},
         )
+    await ws_manager.broadcast({
+        "type": "new_facture",
+        "id": facture.id,
+        "fournisseur_nom": req.fournisseur_nom,
+        "montant_ttc": req.montant_ttc,
+        "incoherence_detectee": incoherence,
+    })
     return {"status": "received", "id": facture.id, "incoherence_detectee": incoherence}
 
 
