@@ -97,8 +97,6 @@ class UserCreateRequest(BaseModel):
 @router.post("")
 def create_user(req: UserCreateRequest, db: Session = Depends(get_db),
                 current_user=Depends(require_role("admin"))):
-    if req.role == "admin":
-        raise HTTPException(status_code=403, detail="error_cannot_create_admin")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=409, detail="error_username_exists")
     if len(req.password) < 6:
