@@ -116,7 +116,7 @@ class ProduitCreateRequest(BaseModel):
 
 
 @router.post("/produits")
-def create_produit(req: ProduitCreateRequest, db: Session = Depends(get_db),
+async def create_produit(req: ProduitCreateRequest, db: Session = Depends(get_db),
                    current_user=Depends(require_role("admin", "manager"))):
     if db.query(Produit).filter(Produit.sku == req.sku).first():
         raise HTTPException(status_code=409, detail="error_sku_exists")
@@ -132,7 +132,9 @@ def create_produit(req: ProduitCreateRequest, db: Session = Depends(get_db),
     enregistrer_audit(db, user_id=current_user.id, action="created",
                       table_cible="produits", enregistrement_id=p.id,
                       apres=req.model_dump())
+    await ws_manager.broadcast({"type": "stock_update", "produit_id": p.id, "nouvelle_quantite": 0})
     return {"status": "ok", "id": p.id}
+
 
 class FournisseurCreateRequest(BaseModel):
     nom: str
@@ -166,7 +168,7 @@ class LotCreateRequest(BaseModel):
 
 
 @router.post("/lots")
-def create_lot(req: LotCreateRequest, db: Session = Depends(get_db),
+async def create_lot(req: LotCreateRequest, db: Session = Depends(get_db),
                current_user=Depends(require_role("admin"))):
     lot = Lot(
         produit_id=req.produit_id,
@@ -180,6 +182,8 @@ def create_lot(req: LotCreateRequest, db: Session = Depends(get_db),
     db.add(lot)
     db.commit()
     db.refresh(lot)
+    await ws_manager.broadcast({"type": "stock_update", "produit_id": req.produit_id, "nouvelle_quantite": lot.quantite_physique})
+
     return {"status": "ok", "id": lot.id}
 
 

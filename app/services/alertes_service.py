@@ -27,7 +27,7 @@ async def creer_alerte(db: Session, type: str, niveau: str, message: str,
         "message": alerte.message,
         "source_module": alerte.source_module,
         "metadata_json": alerte.metadata_json,
-        "created_at": str(alerte.timestamp),
+        "created_at": alerte.timestamp.isoformat() + "Z",
         "is_read": alerte.lu,
     })
     return alerte

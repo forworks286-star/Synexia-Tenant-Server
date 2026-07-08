@@ -31,7 +31,7 @@ def get_alertes(
                 "id": a.id, "level": a.niveau, "title": a.type,
                 "message": a.message, "source_module": a.source_module,
                 "metadata_json": a.metadata_json,
-                "created_at": str(a.timestamp), "is_read": a.lu,
+                "created_at": a.timestamp.isoformat() + "Z", "is_read": a.lu,
             } for a in alertes
         ],
     }
