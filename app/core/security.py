@@ -5,9 +5,14 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
+import uuid
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+
+def generate_jti() -> str:
+    """Identifiant unique pour chaque refresh token émis — sert à la rotation et à la détection de réutilisation."""
+    return uuid.uuid4().hex
 
 def create_access_token(data: dict) -> str:
     payload = data.copy()

@@ -28,7 +28,7 @@ def get_alertes(
         "total": total, "page": page, "limit": limit,
         "results": [
             {
-                "id": a.id, "level": a.niveau, "title": a.type,
+                "id": a.id, "level": a.niveau, "title": a.type, "type": a.type,
                 "message": a.message, "source_module": a.source_module,
                 "metadata_json": a.metadata_json,
                 "created_at": a.timestamp.isoformat() + "Z", "is_read": a.lu,

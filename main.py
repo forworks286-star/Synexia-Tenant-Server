@@ -6,10 +6,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
+from app.models import users as users_model, auth_sessions
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.api import auth, stock, integrations, factures, alertes, dashboard, users
 from app.license_client import verifier_licence_au_demarrage
+
 
 limiter = Limiter(key_func=get_remote_address)
 
