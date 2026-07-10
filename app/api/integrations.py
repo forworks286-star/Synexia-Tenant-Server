@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 
 from ..core.database import get_db
-from ..core.security import verify_device_key
+from ..core.security import verify_device_key, get_current_user
 from ..core.ws_manager import ws_manager
 from ..models.integrations import CameraEvent, EnergieLog, AutomationEvent, FaceEvent
 from ..models.alertes import Alerte
@@ -109,7 +109,7 @@ async def recevoir_face_id(
 
 @router.get("/face-events")
 def get_face_events(limit: int = 50, db: Session = Depends(get_db),
-                    _=Depends(verify_device_key)):
+                    current_user=Depends(get_current_user)):
     events = db.query(FaceEvent).order_by(FaceEvent.timestamp.desc()).limit(limit).all()
     return {"results": [
         {"id": e.id, "personne_id": e.personne_id, "nom": e.nom,
