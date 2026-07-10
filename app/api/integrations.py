@@ -15,6 +15,12 @@ from ..services.alertes_service import creer_alerte as _creer_alerte
 
 router = APIRouter()
 
+def _generate_numero_facture(db: Session) -> str:
+    from datetime import datetime as _dt
+    year = _dt.utcnow().year
+    count = db.query(Facture).filter(Facture.numero_facture.like(f"{year}-%")).count()
+    return f"{year}-{count + 1:04d}"
+
 # ── Camera Event (équipe IA) ───────────────────────────────────
 
 class CameraEventRequest(BaseModel):
@@ -322,7 +328,11 @@ class OcrResultRequest(BaseModel):
     montant_ht: float
     montant_tva: float
     montant_ttc: float
+    taux_tva: float = 19.0
     ppa: Optional[float] = None
+    fournisseur_nif: Optional[str] = None
+    fournisseur_nis: Optional[str] = None
+    fournisseur_rc: Optional[str] = None
     image_url: Optional[str] = None
     raw_json: Dict[str, Any] = {}
 
@@ -337,7 +347,10 @@ async def recevoir_resultat_ocr(
     facture = Facture(
         fournisseur_nom=req.fournisseur_nom, date=req.date,
         montant_ht=req.montant_ht, montant_tva=req.montant_tva,
-        montant_ttc=req.montant_ttc, ppa=req.ppa,
+        montant_ttc=req.montant_ttc, taux_tva=req.taux_tva, ppa=req.ppa,
+        numero_facture=_generate_numero_facture(db),
+        fournisseur_nif=req.fournisseur_nif, fournisseur_nis=req.fournisseur_nis,
+        fournisseur_rc=req.fournisseur_rc,
         image_url=req.image_url, ocr_raw_json=req.raw_json,
         incoherence_detectee=incoherence, statut="pending",
         type_facture=req.type_facture,

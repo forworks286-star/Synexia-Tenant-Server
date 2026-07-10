@@ -9,6 +9,7 @@ from app.core.database import Base, engine
 from app.models import users as users_model, auth_sessions
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
+from app.core.auto_migrate import auto_migrate_columns
 from app.api import auth, stock, integrations, factures, alertes, dashboard, users
 from app.license_client import verifier_licence_au_demarrage
 
@@ -19,6 +20,7 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    auto_migrate_columns(engine, Base)
     is_valid = await verifier_licence_au_demarrage()
     if not is_valid:
         raise RuntimeError("Licence invalide — demarrage refuse")

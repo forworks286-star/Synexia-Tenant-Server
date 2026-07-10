@@ -15,6 +15,11 @@ class Facture(Base):
     montant_tva = Column(Float, default=0.0)
     montant_ttc = Column(Float, default=0.0)
     ppa = Column(Float, nullable=True)  # Prix Public Algérien - pharmacies uniquement
+    numero_facture = Column(String, nullable=True, unique=True)
+    taux_tva = Column(Float, default=19.0)
+    fournisseur_nif = Column(String, nullable=True)
+    fournisseur_nis = Column(String, nullable=True)
+    fournisseur_rc = Column(String, nullable=True)
 
     statut = Column(String, default="pending")  # pending | validated | rejected
     type_facture = Column(String, default="achat")  # achat | vente
