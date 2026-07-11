@@ -6,11 +6,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
-from app.models import users as users_model, auth_sessions
+from app.models import users as users_model, auth_sessions, lignes_facture
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.core.auto_migrate import auto_migrate_columns
-from app.api import auth, stock, integrations, factures, alertes, dashboard, users
+from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture
 from app.license_client import verifier_licence_au_demarrage
 
 
@@ -47,6 +47,7 @@ app.add_middleware(
 
 app.include_router(auth.router,         prefix="/api/v1/auth",         tags=["Auth"])
 app.include_router(stock.router,        prefix="/api/v1/stock",        tags=["Stock"])
+app.include_router(lignes_facture.router, prefix="/api/v1", tags=["Lignes Facture"])
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations IA/IoT"])
 app.include_router(factures.router,     prefix="/api/v1/factures",     tags=["Factures"])
 app.include_router(alertes.router,      prefix="/api/v1/alertes",      tags=["Alertes"])

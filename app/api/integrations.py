@@ -321,6 +321,13 @@ def get_latest_automation_per_zone(db: Session = Depends(get_db),
 
 # ── OCR Result (équipe IA — factures) ─────────────────────────
 
+class LigneOcr(BaseModel):
+    designation: str
+    type_stock: str  # matiere_premiere | produit_fini | marchandise | consommable — obligatoire
+    quantite: float
+    prix_unitaire: float
+
+
 class OcrResultRequest(BaseModel):
     fournisseur_nom: str
     type_facture: str = "achat"  # achat | vente
@@ -335,6 +342,7 @@ class OcrResultRequest(BaseModel):
     fournisseur_rc: Optional[str] = None
     image_url: Optional[str] = None
     raw_json: Dict[str, Any] = {}
+    lignes: List[LigneOcr] = []
 
 
 @router.post("/ocr-result")
@@ -357,6 +365,22 @@ async def recevoir_resultat_ocr(
     )
     db.add(facture)
     db.commit()
+    db.refresh(facture)
+
+    if req.lignes:
+        from ..models.lignes_facture import LigneFacture
+        from ..services.stock_service import trouver_produit_correspondant as _match
+        for l in req.lignes:
+            produit_existant = _match(db, l.designation)
+            db.add(LigneFacture(
+                facture_id=facture.id,
+                produit_id=produit_existant.id if produit_existant else None,
+                designation_brute=l.designation, type_stock=l.type_stock,
+                quantite=l.quantite, prix_unitaire=l.prix_unitaire,
+                montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="ocr",
+            ))
+        db.commit()
+
     if incoherence:
         await _creer_alerte(
             db, type="facture", niveau="warning",

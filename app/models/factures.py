@@ -22,8 +22,10 @@ class Facture(Base):
     fournisseur_rc = Column(String, nullable=True)
 
     statut = Column(String, default="pending")  # pending | validated | rejected
-    type_facture = Column(String, default="achat")  # achat | vente
+    type_facture = Column(String, default="achat")  # achat | vente | ajustement_manuel
     image_url = Column(String, nullable=True)
+    cree_manuellement = Column(Boolean, default=False)
+    motif_rejet = Column(String, nullable=True)
 
     # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
     ocr_raw_json = Column(JSON, default=dict)

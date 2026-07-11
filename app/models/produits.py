@@ -22,6 +22,7 @@ class Produit(Base):
     sku = Column(String, unique=True, nullable=False)
     nom = Column(String, nullable=False)
     categorie = Column(String, nullable=True)
+    type_stock = Column(String, default="marchandise")  # matiere_premiere | produit_fini | marchandise | consommable
     qr_code = Column(String, unique=True, nullable=False)
     code_barre = Column(String, nullable=True)
     unite_mesure = Column(String, default="piece")
@@ -67,6 +68,7 @@ class Lot(Base):
     id = Column(Integer, primary_key=True)
     produit_id = Column(Integer, ForeignKey("produits.id"), nullable=False)
     numero_lot = Column(String, nullable=True)
+    facture_id = Column(Integer, ForeignKey("factures.id"), nullable=True)
 
     quantite_physique = Column(Integer, default=0)
     quantite_reservee = Column(Integer, default=0)

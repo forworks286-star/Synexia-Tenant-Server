@@ -14,6 +14,8 @@ from ..models.alertes import CommandeAuto
 from ..models.tenant_config import TenantConfig
 from ..services.fefo_service import verifier_fefo, FefoViolationError
 from ..services.audit_service import enregistrer_audit
+from ..models.factures import Facture
+from ..models.lignes_facture import LigneFacture
 
 router = APIRouter()
 
@@ -23,6 +25,7 @@ def _produit_to_dict(p: Produit) -> dict:
     pmp = p.prix_moyen_pondere or 0.0
     return {
         "id": p.id, "sku": p.sku, "name": p.nom, "categorie": p.categorie,
+        "type_stock": p.type_stock,
         "qr_reference": p.qr_code, "code_barre": p.code_barre,
         "unite_mesure": p.unite_mesure, "numero_serie": p.numero_serie,
         "photo_url": p.photo_url, "pays_origine": p.pays_origine,
@@ -54,6 +57,8 @@ def _produit_to_dict(p: Produit) -> dict:
                 "date_fabrication": str(l.date_fabrication) if l.date_fabrication else None,
                 "date_expiration": str(l.date_expiration) if l.date_expiration else None,
                 "temperature_requise": l.temperature_requise,
+                "facture_id": l.facture_id,
+                "numero_facture": l.facture.numero_facture if l.facture_id and l.facture else None,
             } for l in p.lots
         ],
     }
@@ -99,6 +104,7 @@ class ProduitCreateRequest(BaseModel):
     sku: str
     nom: str
     categorie: Optional[str] = None
+    type_stock: str = "marchandise"
     qr_code: str
     code_barre: Optional[str] = None
     unite_mesure: str = "piece"
@@ -423,3 +429,90 @@ def rejeter_commande(commande_id: int, db: Session = Depends(get_db),
     enregistrer_audit(db, user_id=current_user.id, action="commande_rejetee",
                       table_cible="commandes_auto", enregistrement_id=c.id)
     return {"status": "ok"}
+
+
+class AjoutManuelCompletRequest(BaseModel):
+    sku: str
+    nom: str
+    categorie: Optional[str] = None
+    qr_code: str
+    code_barre: Optional[str] = None
+    unite_mesure: str = "piece"
+    type_stock: str = "marchandise"
+    prix_achat: float = 0.0
+    prix_vente: float = 0.0
+    taux_tva: float = 19.0
+    devise: str = "DZD"
+    seuil_critique: int = 10
+    quantite_initiale: int
+    date_expiration: Optional[str] = None
+    fournisseur_id: Optional[int] = None
+
+
+@router.post("/produits/ajout-manuel-complet")
+async def ajout_manuel_complet(req: AjoutManuelCompletRequest, db: Session = Depends(get_db),
+                                current_user=Depends(require_role("admin", "manager"))):
+    from ..services.alertes_service import creer_alerte
+    from .integrations import _generate_numero_facture
+
+    if db.query(Produit).filter(Produit.sku == req.sku).first():
+        raise HTTPException(status_code=409, detail="error_sku_exists")
+    if db.query(Produit).filter(Produit.qr_code == req.qr_code).first():
+        raise HTTPException(status_code=409, detail="error_qr_exists")
+
+    produit = Produit(
+        sku=req.sku, nom=req.nom, categorie=req.categorie, qr_code=req.qr_code,
+        code_barre=req.code_barre, unite_mesure=req.unite_mesure,
+        type_stock=req.type_stock, prix_achat=req.prix_achat,
+        prix_moyen_pondere=req.prix_achat, prix_vente=req.prix_vente,
+        taux_tva=req.taux_tva, devise=req.devise, seuil_critique=req.seuil_critique,
+        fournisseur_id=req.fournisseur_id,
+        cree_par_id=current_user.id, date_creation=datetime.utcnow(),
+    )
+    db.add(produit)
+    db.flush()
+
+    montant_ht = round(req.quantite_initiale * req.prix_achat, 2)
+    montant_tva = round(montant_ht * req.taux_tva / 100, 2)
+    montant_ttc = round(montant_ht + montant_tva, 2)
+
+    facture = Facture(
+        fournisseur_nom="Ajustement manuel (stock initial)",
+        date=datetime.utcnow().date(), type_facture="ajustement_manuel",
+        montant_ht=montant_ht, montant_tva=montant_tva, montant_ttc=montant_ttc,
+        taux_tva=req.taux_tva, numero_facture=_generate_numero_facture(db),
+        statut="validated", cree_manuellement=True,
+    )
+    db.add(facture)
+    db.flush()
+
+    db.add(LigneFacture(
+        facture_id=facture.id, produit_id=produit.id,
+        designation_brute=produit.nom, quantite=req.quantite_initiale,
+        prix_unitaire=req.prix_achat, montant_ligne=montant_ht, source="manuel",
+    ))
+
+    lot = Lot(
+        produit_id=produit.id, numero_lot=f"LOT-{facture.numero_facture}-A",
+        quantite_physique=req.quantite_initiale, statut="disponible",
+        date_entree_stock=datetime.utcnow(), facture_id=facture.id,
+        date_expiration=req.date_expiration,
+    )
+    db.add(lot)
+    db.flush()
+    db.add(Mouvement(
+        produit_id=produit.id, lot_id=lot.id, type="entree",
+        quantite=req.quantite_initiale, user_id=current_user.id,
+        source_device="ajustement_manuel", timestamp=datetime.utcnow(),
+    ))
+    db.commit()
+    db.refresh(produit)
+
+    await creer_alerte(
+        db, type="stock", niveau="info",
+        message=f"Produit '{produit.nom}' ajoute manuellement — stock initial {req.quantite_initiale} unites (Facture {facture.numero_facture})",
+        source="manuel", meta={"produit_id": produit.id, "facture_id": facture.id},
+    )
+    await ws_manager.broadcast({"type": "stock_update", "produit_id": produit.id, "nouvelle_quantite": req.quantite_initiale})
+
+    return {"status": "ok", "produit_id": produit.id, "facture_id": facture.id}
