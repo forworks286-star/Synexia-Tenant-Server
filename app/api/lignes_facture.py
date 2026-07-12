@@ -32,6 +32,7 @@ def _ligne_to_dict(l: LigneFacture) -> dict:
         "montant_ligne": l.montant_ligne, "source": l.source,
         "facture_date": str(l.facture.date), "fournisseur_nom": l.facture.fournisseur_nom,
         "type_facture": l.facture.type_facture, "numero_facture": l.facture.numero_facture,
+        "facture_status": l.facture.statut,
     }
 
 
@@ -97,12 +98,19 @@ def historique_prix_produit(produit_id: int, db: Session = Depends(get_db),
     produit = db.query(Produit).filter(Produit.id == produit_id).first()
     if not produit:
         raise HTTPException(status_code=404, detail="error_produit_not_found")
-    lignes = (db.query(LigneFacture).join(Facture, LigneFacture.facture_id == Facture.id)
-              .filter(LigneFacture.produit_id == produit_id)
-              .order_by(Facture.date.desc()).all())
+    lignes = (
+        db.query(LigneFacture).join(Facture, LigneFacture.facture_id == Facture.id)
+        .filter(LigneFacture.produit_id == produit_id)
+        .order_by(Facture.date.desc(), Facture.id.desc()).all()
+    )
     historique = [_ligne_to_dict(l) for l in lignes]
-    achats = [l["prix_unitaire"] for l in historique if l["type_facture"] in ("achat", "ajustement_manuel")]
-    ventes = [l["prix_unitaire"] for l in historique if l["type_facture"] == "vente"]
+
+    # Seules les factures VALIDÉES comptent dans les moyennes — une facture rejetée
+    # n'a jamais réellement affecté le stock ni les prix.
+    achats = [l["prix_unitaire"] for l in historique
+              if l["type_facture"] in ("achat", "ajustement_manuel") and l["facture_status"] == "validated"]
+    ventes = [l["prix_unitaire"] for l in historique
+              if l["type_facture"] == "vente" and l["facture_status"] == "validated"]
     prix_achat_moyen = round(sum(achats) / len(achats), 2) if achats else None
     prix_vente_moyen = round(sum(ventes) / len(ventes), 2) if ventes else None
     marge_percent = None

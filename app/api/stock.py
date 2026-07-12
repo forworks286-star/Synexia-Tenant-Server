@@ -20,6 +20,19 @@ from ..models.lignes_facture import LigneFacture
 router = APIRouter()
 
 
+def _find_or_create_fournisseur(db: Session, nom: Optional[str]):
+    if not nom or not nom.strip():
+        return None
+    from ..models.produits import Fournisseur as FournisseurModel
+    f = db.query(FournisseurModel).filter(FournisseurModel.nom.ilike(nom.strip())).first()
+    if f:
+        return f
+    f = FournisseurModel(nom=nom.strip())
+    db.add(f)
+    db.flush()
+    return f
+
+
 def _produit_to_dict(p: Produit) -> dict:
     stock_physique = sum(l.quantite_physique for l in p.lots)
     pmp = p.prix_moyen_pondere or 0.0
@@ -447,6 +460,11 @@ class AjoutManuelCompletRequest(BaseModel):
     quantite_initiale: int
     date_expiration: Optional[str] = None
     fournisseur_id: Optional[int] = None
+    fournisseur_nom: Optional[str] = None
+    pays_origine: Optional[str] = None
+    fournisseur_nif: Optional[str] = None
+    fournisseur_nis: Optional[str] = None
+    fournisseur_rc: Optional[str] = None
 
 
 @router.post("/produits/ajout-manuel-complet")
@@ -460,13 +478,16 @@ async def ajout_manuel_complet(req: AjoutManuelCompletRequest, db: Session = Dep
     if db.query(Produit).filter(Produit.qr_code == req.qr_code).first():
         raise HTTPException(status_code=409, detail="error_qr_exists")
 
+    fournisseur = _find_or_create_fournisseur(db, req.fournisseur_nom)
+
     produit = Produit(
         sku=req.sku, nom=req.nom, categorie=req.categorie, qr_code=req.qr_code,
         code_barre=req.code_barre, unite_mesure=req.unite_mesure,
         type_stock=req.type_stock, prix_achat=req.prix_achat,
         prix_moyen_pondere=req.prix_achat, prix_vente=req.prix_vente,
         taux_tva=req.taux_tva, devise=req.devise, seuil_critique=req.seuil_critique,
-        fournisseur_id=req.fournisseur_id,
+        pays_origine=req.pays_origine,
+        fournisseur_id=fournisseur.id if fournisseur else req.fournisseur_id,
         cree_par_id=current_user.id, date_creation=datetime.utcnow(),
     )
     db.add(produit)
@@ -477,12 +498,15 @@ async def ajout_manuel_complet(req: AjoutManuelCompletRequest, db: Session = Dep
     montant_ttc = round(montant_ht + montant_tva, 2)
 
     facture = Facture(
-        fournisseur_nom="Ajustement manuel (stock initial)",
+        fournisseur_nom=req.fournisseur_nom or "Ajustement manuel (stock initial)",
         date=datetime.utcnow().date(), type_facture="ajustement_manuel",
         montant_ht=montant_ht, montant_tva=montant_tva, montant_ttc=montant_ttc,
         taux_tva=req.taux_tva, numero_facture=_generate_numero_facture(db),
+        fournisseur_nif=req.fournisseur_nif, fournisseur_nis=req.fournisseur_nis,
+        fournisseur_rc=req.fournisseur_rc,
         statut="validated", cree_manuellement=True,
     )
+    
     db.add(facture)
     db.flush()
 
@@ -514,5 +538,10 @@ async def ajout_manuel_complet(req: AjoutManuelCompletRequest, db: Session = Dep
         source="manuel", meta={"produit_id": produit.id, "facture_id": facture.id},
     )
     await ws_manager.broadcast({"type": "stock_update", "produit_id": produit.id, "nouvelle_quantite": req.quantite_initiale})
+    await ws_manager.broadcast({
+        "type": "new_facture", "id": facture.id,
+        "fournisseur_nom": facture.fournisseur_nom, "montant_ttc": facture.montant_ttc,
+        "incoherence_detectee": False,
+    })
 
     return {"status": "ok", "produit_id": produit.id, "facture_id": facture.id}
