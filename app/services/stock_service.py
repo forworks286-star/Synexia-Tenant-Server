@@ -106,3 +106,5 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
                     quantite=prise, user_id=current_user.id,
                     source_device="facture", timestamp=datetime.utcnow(),
                 ))
+
+

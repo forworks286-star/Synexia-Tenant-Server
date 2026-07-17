@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from pydantic import BaseModel
@@ -121,3 +122,5 @@ def historique_prix_produit(produit_id: int, db: Session = Depends(get_db),
         "prix_achat_moyen": prix_achat_moyen, "prix_vente_moyen": prix_vente_moyen,
         "marge_percent": marge_percent,
     }
+
+

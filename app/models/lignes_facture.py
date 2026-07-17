@@ -1,3 +1,4 @@
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from ..core.database import Base
@@ -19,3 +20,5 @@ class LigneFacture(Base):
 
     facture = relationship("Facture", foreign_keys=[facture_id])
     produit = relationship("Produit", foreign_keys=[produit_id])
+
+

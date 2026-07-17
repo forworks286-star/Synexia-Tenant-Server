@@ -420,3 +420,4 @@ async def recevoir_log_energie(
     db.add(log)
     db.commit()
     return {"status": "received"}
+
