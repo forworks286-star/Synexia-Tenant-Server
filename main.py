@@ -6,11 +6,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
-from app.models import users as users_model, auth_sessions, lignes_facture
+from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.core.auto_migrate import auto_migrate_columns
-from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture
+from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture, demandes as demandes_api, bom as bom_api
 from app.license_client import verifier_licence_au_demarrage
 
 
@@ -53,6 +53,8 @@ app.include_router(factures.router,     prefix="/api/v1/factures",     tags=["Fa
 app.include_router(alertes.router,      prefix="/api/v1/alertes",      tags=["Alertes"])
 app.include_router(dashboard.router,    prefix="/api/v1/dashboard",    tags=["Dashboard"])
 app.include_router(users.router,        prefix="/api/v1/users",        tags=["Users"])
+app.include_router(demandes_api.router, prefix="/api/v1/demandes",     tags=["Demandes de modification"])
+app.include_router(bom_api.router,      prefix="/api/v1/bom",          tags=["BOM / Fabrication"])
 
 
 @app.get("/", tags=["Sante"])

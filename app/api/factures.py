@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -26,6 +27,8 @@ def _facture_to_dict(f: Facture) -> dict:
         "status": f.statut, "photo_url": f.image_url,
         "incoherence_detectee": f.incoherence_detectee,
         "cree_manuellement": f.cree_manuellement, "motif_rejet": f.motif_rejet,
+        "motif_creation_manuelle": f.motif_creation_manuelle,
+        "cree_par_id": f.cree_par_id,
         "stamp_detected": True, "signature_detected": True,
     }
 
@@ -36,10 +39,64 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
     query = db.query(Facture)
     if type_facture:
         query = query.filter(Facture.type_facture == type_facture)
+    # Session privee : un stockiste/agent ne voit que ses propres factures.
+    # admin et manager voient tout (supervision).
+    if current_user.role not in ("admin", "manager"):
+        query = query.filter(Facture.cree_par_id == current_user.id)
     total = query.count()
     factures = query.order_by(Facture.id.desc()).offset((page - 1) * limit).limit(limit).all()
     return {"total": total, "page": page, "limit": limit,
             "results": [_facture_to_dict(f) for f in factures]}
+
+
+class FactureManuelleRequest(BaseModel):
+    fournisseur_nom: str
+    date: str
+    type_facture: str = "achat"  # achat | vente
+    montant_ht: float = 0.0
+    montant_tva: float = 0.0
+    montant_ttc: float = 0.0
+    taux_tva: float = 19.0
+    motif_creation_manuelle: str
+
+
+@router.post("/manuelle")
+async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depends(get_db),
+                                  current_user=Depends(get_current_user)):
+    if not req.motif_creation_manuelle or not req.motif_creation_manuelle.strip():
+        raise HTTPException(status_code=400, detail="error_motif_requis")
+    from ..api.integrations import _generate_numero_facture
+    try:
+        date_facture = datetime.strptime(req.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="error_date_invalide")
+    facture = Facture(
+        fournisseur_nom=req.fournisseur_nom, date=date_facture,
+        montant_ht=req.montant_ht, montant_tva=req.montant_tva, montant_ttc=req.montant_ttc,
+        taux_tva=req.taux_tva, numero_facture=_generate_numero_facture(db),
+        type_facture=req.type_facture, statut="pending",
+        cree_manuellement=True, motif_creation_manuelle=req.motif_creation_manuelle.strip(),
+        cree_par_id=current_user.id,
+    )
+    db.add(facture)
+    db.commit()
+    db.refresh(facture)
+    enregistrer_audit(db, user_id=current_user.id, action="facture_creee_manuellement",
+                      table_cible="factures", enregistrement_id=facture.id,
+                      apres={"motif": req.motif_creation_manuelle})
+    from ..services.alertes_service import creer_alerte
+    await creer_alerte(
+        db, type="facture", niveau="warning",
+        message=f"Facture creee manuellement par {current_user.full_name} — verification requise",
+        source="facture_manuelle",
+        meta={"facture_id": facture.id, "user_id": current_user.id},
+    )
+    await ws_manager.broadcast({
+        "type": "new_facture", "id": facture.id,
+        "fournisseur_nom": req.fournisseur_nom, "montant_ttc": req.montant_ttc,
+        "cree_manuellement": True,
+    })
+    return _facture_to_dict(facture)
 
 
 @router.get("/{facture_id}")

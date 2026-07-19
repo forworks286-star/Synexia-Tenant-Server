@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, JSON, Boolean
+from sqlalchemy import Column, Integer, String, Float, Date, JSON, Boolean, ForeignKey
 from ..core.database import Base
 
 class Facture(Base):
@@ -25,7 +25,9 @@ class Facture(Base):
     type_facture = Column(String, default="achat")  # achat | vente | ajustement_manuel
     image_url = Column(String, nullable=True)
     cree_manuellement = Column(Boolean, default=False)
+    motif_creation_manuelle = Column(String, nullable=True)  # compte-rendu obligatoire si cree_manuellement
     motif_rejet = Column(String, nullable=True)
+    cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # proprietaire de la facture (session)
 
     # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
     ocr_raw_json = Column(JSON, default=dict)

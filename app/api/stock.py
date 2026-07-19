@@ -1,4 +1,7 @@
+import io
+import qrcode
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 from pydantic import BaseModel
@@ -442,6 +445,47 @@ def rejeter_commande(commande_id: int, db: Session = Depends(get_db),
     enregistrer_audit(db, user_id=current_user.id, action="commande_rejetee",
                       table_cible="commandes_auto", enregistrement_id=c.id)
     return {"status": "ok"}
+
+
+@router.get("/lots/{lot_id}/qr")
+def qr_code_lot(lot_id: int, db: Session = Depends(get_db),
+                 current_user=Depends(get_current_user)):
+    """Genere une image PNG imprimable du QR code d'un lot — a coller sur les cartons."""
+    lot = db.query(Lot).filter(Lot.id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="error_lot_not_found")
+    contenu = f"SYNEXIA-LOT:{lot.id}:{lot.numero_lot}"
+    img = qrcode.make(contenu)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return StreamingResponse(buffer, media_type="image/png")
+
+
+@router.get("/produits/{produit_id}/lot-suggere")
+def lot_suggere_fefo(produit_id: int, quantite: int = 1, db: Session = Depends(get_db),
+                      current_user=Depends(get_current_user)):
+    """Indique au stockiste EXACTEMENT quel(s) lot(s) prendre pour respecter le FEFO."""
+    lots = (db.query(Lot)
+            .filter(Lot.produit_id == produit_id, Lot.quantite_physique > 0)
+            .order_by(Lot.date_expiration.asc().nullslast()).all())
+    suggestions = []
+    restant = quantite
+    for lot in lots:
+        if restant <= 0:
+            break
+        prise = min(lot.quantite_disponible, restant)
+        if prise <= 0:
+            continue
+        suggestions.append({
+            "lot_id": lot.id, "numero_lot": lot.numero_lot,
+            "emplacement": lot.emplacement,
+            "date_expiration": str(lot.date_expiration) if lot.date_expiration else None,
+            "quantite_a_prendre": prise,
+        })
+        restant -= prise
+    return {"produit_id": produit_id, "quantite_demandee": quantite,
+            "quantite_couverte": quantite - restant, "suggestions": suggestions}
 
 
 class AjoutManuelCompletRequest(BaseModel):

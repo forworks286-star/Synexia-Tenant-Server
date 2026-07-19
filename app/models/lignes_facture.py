@@ -14,10 +14,13 @@ class LigneFacture(Base):
     type_stock = Column(String, nullable=True)
     quantite = Column(Float, default=0.0)
     prix_unitaire = Column(Float, default=0.0)
+    prix_vente = Column(Float, nullable=True)  # prix de vente cible fixe a la reception
     montant_ligne = Column(Float, default=0.0)
     source = Column(String, default="manuel")  # manuel | ocr
+    date_fabrication = Column(String, nullable=True)  # format YYYY-MM-DD
+    date_expiration = Column(String, nullable=True)   # format YYYY-MM-DD
+    date_expiration_manquante = Column(String, default="false")  # "true" si Lot autorise sans date (alerte)
     raw_json = Column(JSON, default=dict)
-
     facture = relationship("Facture", foreign_keys=[facture_id])
     produit = relationship("Produit", foreign_keys=[produit_id])
 

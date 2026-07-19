@@ -326,6 +326,9 @@ class LigneOcr(BaseModel):
     type_stock: str  # matiere_premiere | produit_fini | marchandise | consommable — obligatoire
     quantite: float
     prix_unitaire: float
+    prix_vente: Optional[float] = None
+    date_fabrication: Optional[str] = None  # YYYY-MM-DD, lu sur la facture/colis si visible
+    date_expiration: Optional[str] = None   # YYYY-MM-DD
 
 
 class OcrResultRequest(BaseModel):
@@ -343,6 +346,7 @@ class OcrResultRequest(BaseModel):
     image_url: Optional[str] = None
     raw_json: Dict[str, Any] = {}
     lignes: List[LigneOcr] = []
+    cree_par_id: Optional[int] = None  # utilisateur mobile ayant declenche la photo
 
 
 @router.post("/ocr-result")
@@ -353,7 +357,7 @@ async def recevoir_resultat_ocr(
 ):
     incoherence = abs((req.montant_ht + req.montant_tva) - req.montant_ttc) > 0.01
     facture = Facture(
-        fournisseur_nom=req.fournisseur_nom, date=req.date,
+        fournisseur_nom=req.fournisseur_nom, date=datetime.strptime(req.date, "%Y-%m-%d").date(),
         montant_ht=req.montant_ht, montant_tva=req.montant_tva,
         montant_ttc=req.montant_ttc, taux_tva=req.taux_tva, ppa=req.ppa,
         numero_facture=_generate_numero_facture(db),
@@ -361,25 +365,39 @@ async def recevoir_resultat_ocr(
         fournisseur_rc=req.fournisseur_rc,
         image_url=req.image_url, ocr_raw_json=req.raw_json,
         incoherence_detectee=incoherence, statut="pending",
-        type_facture=req.type_facture,
+        type_facture=req.type_facture, cree_par_id=req.cree_par_id,
     )
     db.add(facture)
     db.commit()
     db.refresh(facture)
 
+    date_manquante_globale = False
     if req.lignes:
         from ..models.lignes_facture import LigneFacture
         from ..services.stock_service import trouver_produit_correspondant as _match
         for l in req.lignes:
             produit_existant = _match(db, l.designation)
+            date_manquante = req.type_facture != "vente" and not l.date_expiration
+            if date_manquante:
+                date_manquante_globale = True
             db.add(LigneFacture(
                 facture_id=facture.id,
                 produit_id=produit_existant.id if produit_existant else None,
                 designation_brute=l.designation, type_stock=l.type_stock,
-                quantite=l.quantite, prix_unitaire=l.prix_unitaire,
+                quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+                date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
+                date_expiration_manquante="true" if date_manquante else "false",
                 montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="ocr",
             ))
         db.commit()
+
+    if date_manquante_globale:
+        await _creer_alerte(
+            db, type="facture", niveau="warning",
+            message=f"Date(s) d'expiration manquante(s) sur la facture OCR — {req.fournisseur_nom}",
+            source="ia_ocr",
+            meta={"facture_id": facture.id},
+        )
 
     if incoherence:
         await _creer_alerte(

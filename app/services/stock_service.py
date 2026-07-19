@@ -75,13 +75,28 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
 
         if not est_sortie:
             numero_lot = f"LOT-{facture.numero_facture or facture.id}-{lettres[idx % 26]}"
+            date_exp = None
+            if ligne.date_expiration:
+                try:
+                    date_exp = datetime.strptime(ligne.date_expiration, "%Y-%m-%d").date()
+                except ValueError:
+                    date_exp = None
+            date_fab = None
+            if ligne.date_fabrication:
+                try:
+                    date_fab = datetime.strptime(ligne.date_fabrication, "%Y-%m-%d").date()
+                except ValueError:
+                    date_fab = None
             lot = Lot(
                 produit_id=produit.id, numero_lot=numero_lot,
                 quantite_physique=int(ligne.quantite), statut="disponible",
                 date_entree_stock=datetime.utcnow(), facture_id=facture.id,
+                date_expiration=date_exp, date_fabrication=date_fab,
             )
             db.add(lot)
             db.flush()
+            if ligne.prix_vente:
+                produit.prix_vente = ligne.prix_vente
             db.add(Mouvement(
                 produit_id=produit.id, lot_id=lot.id, type="entree",
                 quantite=int(ligne.quantite), user_id=current_user.id,

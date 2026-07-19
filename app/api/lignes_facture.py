@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..core.database import get_db
 from ..core.security import get_current_user, require_role
+from ..core.ws_manager import ws_manager
 from ..models.factures import Facture
 from ..models.produits import Produit
 from ..models.lignes_facture import LigneFacture
@@ -20,6 +21,9 @@ class LigneCreateRequest(BaseModel):
     type_stock: Optional[str] = None
     quantite: float
     prix_unitaire: float
+    prix_vente: Optional[float] = None
+    date_fabrication: Optional[str] = None  # YYYY-MM-DD
+    date_expiration: Optional[str] = None   # YYYY-MM-DD
 
 
 def _ligne_to_dict(l: LigneFacture) -> dict:
@@ -29,20 +33,31 @@ def _ligne_to_dict(l: LigneFacture) -> dict:
         "designation_brute": l.designation_brute,
         "type_stock": l.type_stock or (l.produit.type_stock if l.produit else None),
         "matched": l.produit_id is not None,
-        "quantite": l.quantite, "prix_unitaire": l.prix_unitaire,
+        "quantite": l.quantite, "prix_unitaire": l.prix_unitaire, "prix_vente": l.prix_vente,
         "montant_ligne": l.montant_ligne, "source": l.source,
+        "date_fabrication": l.date_fabrication, "date_expiration": l.date_expiration,
+        "date_expiration_manquante": l.date_expiration_manquante == "true",
         "facture_date": str(l.facture.date), "fournisseur_nom": l.facture.fournisseur_nom,
         "type_facture": l.facture.type_facture, "numero_facture": l.facture.numero_facture,
-        "facture_status": l.facture.statut,
+        "facture_status": l.facture.statut, "facture_cree_par_id": l.facture.cree_par_id,
     }
 
 
+def _verifier_proprietaire_ou_admin(facture: Facture, current_user):
+    """Un stockiste ne peut agir que sur SES propres factures ; admin/manager sur toutes."""
+    if current_user.role in ("admin", "manager"):
+        return
+    if facture.cree_par_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_facture_pas_a_vous")
+
+
 @router.post("/factures/{facture_id}/lignes")
-def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = Depends(get_db),
-                   current_user=Depends(require_role("admin", "manager"))):
+async def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = Depends(get_db),
+                         current_user=Depends(get_current_user)):
     facture = db.query(Facture).filter(Facture.id == facture_id).first()
     if not facture:
         raise HTTPException(status_code=404, detail="error_facture_not_found")
+    _verifier_proprietaire_ou_admin(facture, current_user)
     if facture.statut != "pending":
         raise HTTPException(status_code=400, detail="error_facture_deja_traitee")
 
@@ -57,16 +72,28 @@ def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = Depend
         raise HTTPException(status_code=400, detail="error_type_stock_requis")
 
     produit = db.query(Produit).filter(Produit.id == produit_id).first() if produit_id else None
+    date_manquante = facture.type_facture != "vente" and not req.date_expiration
     ligne = LigneFacture(
         facture_id=facture_id, produit_id=produit_id,
         designation_brute=produit.nom if produit else req.designation,
         type_stock=req.type_stock,
-        quantite=req.quantite, prix_unitaire=req.prix_unitaire,
+        quantite=req.quantite, prix_unitaire=req.prix_unitaire, prix_vente=req.prix_vente,
+        date_fabrication=req.date_fabrication, date_expiration=req.date_expiration,
+        date_expiration_manquante="true" if date_manquante else "false",
         montant_ligne=round(req.quantite * req.prix_unitaire, 2), source="manuel",
     )
     db.add(ligne)
     db.commit()
     db.refresh(ligne)
+    if date_manquante:
+        from ..services.alertes_service import creer_alerte
+        await creer_alerte(
+            db, type="facture", niveau="warning",
+            message=f"Date d'expiration manquante — {ligne.designation_brute} (facture #{facture_id})",
+            source="lignes_facture",
+            meta={"facture_id": facture_id, "ligne_id": ligne.id},
+        )
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture_id})
     return _ligne_to_dict(ligne)
 
 
@@ -81,15 +108,18 @@ def lister_lignes(facture_id: int, db: Session = Depends(get_db),
 
 
 @router.delete("/lignes/{ligne_id}")
-def supprimer_ligne(ligne_id: int, db: Session = Depends(get_db),
-                     current_user=Depends(require_role("admin", "manager"))):
+async def supprimer_ligne(ligne_id: int, db: Session = Depends(get_db),
+                           current_user=Depends(get_current_user)):
     ligne = db.query(LigneFacture).filter(LigneFacture.id == ligne_id).first()
     if not ligne:
         raise HTTPException(status_code=404, detail="error_ligne_not_found")
+    _verifier_proprietaire_ou_admin(ligne.facture, current_user)
     if ligne.facture.statut != "pending":
         raise HTTPException(status_code=400, detail="error_facture_deja_traitee")
+    facture_id = ligne.facture_id
     db.delete(ligne)
     db.commit()
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture_id})
     return {"status": "ok"}
 
 
