@@ -67,6 +67,7 @@ def _produit_to_dict(p: Produit) -> dict:
         "lots": [
             {
                 "id": l.id, "numero_lot": l.numero_lot,
+                "numero_lot_fournisseur": l.numero_lot_fournisseur,
                 "quantite_physique": l.quantite_physique,
                 "quantite_disponible": l.quantite_disponible,
                 "statut": l.statut, "emplacement": l.emplacement,

@@ -23,11 +23,13 @@ class Facture(Base):
 
     statut = Column(String, default="pending")  # pending | validated | rejected
     type_facture = Column(String, default="achat")  # achat | vente | ajustement_manuel
+    type_stock = Column(String, nullable=True)  # marchandise | matiere_premiere | produit_fini | consommable
     image_url = Column(String, nullable=True)
     cree_manuellement = Column(Boolean, default=False)
     motif_creation_manuelle = Column(String, nullable=True)  # compte-rendu obligatoire si cree_manuellement
     motif_rejet = Column(String, nullable=True)
     cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # proprietaire de la facture (session)
+    a_ete_modifiee = Column(Boolean, default=False)
 
     # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
     ocr_raw_json = Column(JSON, default=dict)

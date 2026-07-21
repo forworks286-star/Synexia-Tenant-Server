@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,18 +29,22 @@ def _facture_to_dict(f: Facture) -> dict:
         "cree_manuellement": f.cree_manuellement, "motif_rejet": f.motif_rejet,
         "motif_creation_manuelle": f.motif_creation_manuelle,
         "cree_par_id": f.cree_par_id,
+        "a_ete_modifiee": f.a_ete_modifiee,
         "stamp_detected": True, "signature_detected": True,
     }
 
 
 @router.get("")
 def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = None,
+                 statut: Optional[str] = None,
                  db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     query = db.query(Facture)
     if type_facture:
         query = query.filter(Facture.type_facture == type_facture)
-    # Session privee : un stockiste/agent ne voit que ses propres factures.
-    # admin et manager voient tout (supervision).
+    if statut:
+        query = query.filter(Facture.statut == statut)
+    else:
+        query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee"]))
     if current_user.role not in ("admin", "manager"):
         query = query.filter(Facture.cree_par_id == current_user.id)
     total = query.count()
@@ -49,15 +53,29 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
             "results": [_facture_to_dict(f) for f in factures]}
 
 
+class LigneManuelleRequest(BaseModel):
+    produit_id: Optional[int] = None
+    designation: Optional[str] = None
+    quantite: float
+    prix_unitaire: float
+    prix_vente: Optional[float] = None
+    date_fabrication: Optional[str] = None
+    date_expiration: Optional[str] = None
+    numero_lot_fournisseur: Optional[str] = None
+
+
 class FactureManuelleRequest(BaseModel):
     fournisseur_nom: str
     date: str
     type_facture: str = "achat"  # achat | vente
+    type_stock: str  # marchandise | matiere_premiere | produit_fini | consommable
     montant_ht: float = 0.0
     montant_tva: float = 0.0
     montant_ttc: float = 0.0
     taux_tva: float = 19.0
     motif_creation_manuelle: str
+    lignes: List[LigneManuelleRequest] = []
+    compte_rendu_demande: Optional[str] = None
 
 
 @router.post("/manuelle")
@@ -65,25 +83,52 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
                                   current_user=Depends(get_current_user)):
     if not req.motif_creation_manuelle or not req.motif_creation_manuelle.strip():
         raise HTTPException(status_code=400, detail="error_motif_requis")
+    if not req.lignes:
+        raise HTTPException(status_code=400, detail="error_lignes_requises")
     from ..api.integrations import _generate_numero_facture
+    from ..services.stock_service import trouver_produit_correspondant
     try:
         date_facture = datetime.strptime(req.date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="error_date_invalide")
+
     facture = Facture(
         fournisseur_nom=req.fournisseur_nom, date=date_facture,
         montant_ht=req.montant_ht, montant_tva=req.montant_tva, montant_ttc=req.montant_ttc,
         taux_tva=req.taux_tva, numero_facture=_generate_numero_facture(db),
-        type_facture=req.type_facture, statut="pending",
+        type_facture=req.type_facture, type_stock=req.type_stock,
+        statut="en_attente_modification" if req.compte_rendu_demande else "pending",
         cree_manuellement=True, motif_creation_manuelle=req.motif_creation_manuelle.strip(),
         cree_par_id=current_user.id,
     )
     db.add(facture)
+    db.flush()
+
+    date_manquante_globale = False
+    for l in req.lignes:
+        produit_id = l.produit_id
+        if not produit_id and l.designation:
+            trouve = trouver_produit_correspondant(db, l.designation)
+            if trouve:
+                produit_id = trouve.id
+        date_manquante = req.type_facture != "vente" and not l.date_expiration
+        if date_manquante:
+            date_manquante_globale = True
+        db.add(LigneFacture(
+            facture_id=facture.id, produit_id=produit_id,
+            designation_brute=l.designation, type_stock=req.type_stock,
+            quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+            date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
+            date_expiration_manquante="true" if date_manquante else "false",
+            numero_lot_fournisseur=l.numero_lot_fournisseur,
+            montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="manuel",
+        ))
     db.commit()
     db.refresh(facture)
+
     enregistrer_audit(db, user_id=current_user.id, action="facture_creee_manuellement",
                       table_cible="factures", enregistrement_id=facture.id,
-                      apres={"motif": req.motif_creation_manuelle})
+                      apres={"motif": req.motif_creation_manuelle, "nb_lignes": len(req.lignes)})
     from ..services.alertes_service import creer_alerte
     await creer_alerte(
         db, type="facture", niveau="warning",
@@ -91,6 +136,26 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
         source="facture_manuelle",
         meta={"facture_id": facture.id, "user_id": current_user.id},
     )
+    if date_manquante_globale:
+        await creer_alerte(
+            db, type="facture", niveau="warning",
+            message=f"Date(s) d'expiration manquante(s) sur la facture manuelle #{facture.id}",
+            source="facture_manuelle",
+            meta={"facture_id": facture.id},
+        )
+    if req.compte_rendu_demande:
+        from ..models.demandes import DemandeModification
+        db.add(DemandeModification(
+            facture_id=facture.id, demandeur_id=current_user.id,
+            compte_rendu=req.compte_rendu_demande.strip(),
+            statut="pending", date_creation=datetime.utcnow(),
+        ))
+        db.commit()
+        await creer_alerte(
+            db, type="demande_modification", niveau="warning",
+            message=f"Nouvelle demande de modification — {current_user.full_name} — facture #{facture.id}",
+            source="demandes", meta={"facture_id": facture.id},
+        )
     await ws_manager.broadcast({
         "type": "new_facture", "id": facture.id,
         "fournisseur_nom": req.fournisseur_nom, "montant_ttc": req.montant_ttc,
@@ -98,6 +163,66 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
     })
     return _facture_to_dict(facture)
 
+
+class CompleterModificationRequest(BaseModel):
+    fournisseur_nom: str
+    date: str
+    montant_ht: float = 0.0
+    montant_tva: float = 0.0
+    montant_ttc: float = 0.0
+    taux_tva: float = 19.0
+    lignes: List[LigneManuelleRequest] = []
+
+
+@router.put("/{facture_id}/completer-modification")
+async def completer_modification(facture_id: int, req: CompleterModificationRequest,
+                                   db: Session = Depends(get_db),
+                                   current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.cree_par_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_facture_pas_a_vous")
+    if facture.statut != "modification_autorisee":
+        raise HTTPException(status_code=400, detail="error_facture_pas_en_modification")
+
+    try:
+        date_facture = datetime.strptime(req.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="error_date_invalide")
+
+    from ..services.stock_service import trouver_produit_correspondant
+    db.query(LigneFacture).filter(LigneFacture.facture_id == facture_id).delete()
+
+    facture.fournisseur_nom = req.fournisseur_nom
+    facture.date = date_facture
+    facture.montant_ht = req.montant_ht
+    facture.montant_tva = req.montant_tva
+    facture.montant_ttc = req.montant_ttc
+    facture.taux_tva = req.taux_tva
+    facture.statut = "pending"
+    facture.a_ete_modifiee = True
+
+    for l in req.lignes:
+        produit_id = l.produit_id
+        if not produit_id and l.designation:
+            trouve = trouver_produit_correspondant(db, l.designation)
+            if trouve:
+                produit_id = trouve.id
+        db.add(LigneFacture(
+            facture_id=facture.id, produit_id=produit_id,
+            designation_brute=l.designation, type_stock=facture.type_stock,
+            quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+            date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
+            date_expiration_manquante="false" if l.date_expiration else "true",
+            numero_lot_fournisseur=l.numero_lot_fournisseur,
+            montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="manuel",
+        ))
+    db.commit()
+    enregistrer_audit(db, user_id=current_user.id, action="facture_modification_completee",
+                      table_cible="factures", enregistrement_id=facture.id)
+    await ws_manager.broadcast({"type": "new_facture", "id": facture.id, "cree_manuellement": True})
+    return _facture_to_dict(facture)
 
 @router.get("/{facture_id}")
 def get_facture(facture_id: int, db: Session = Depends(get_db),

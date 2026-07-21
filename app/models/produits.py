@@ -68,6 +68,7 @@ class Lot(Base):
     id = Column(Integer, primary_key=True)
     produit_id = Column(Integer, ForeignKey("produits.id"), nullable=False)
     numero_lot = Column(String, nullable=True)
+    numero_lot_fournisseur = Column(String, nullable=True)
     facture_id = Column(Integer, ForeignKey("factures.id"), nullable=True)
     facture = relationship("Facture", foreign_keys=[facture_id])
 

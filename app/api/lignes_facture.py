@@ -24,6 +24,7 @@ class LigneCreateRequest(BaseModel):
     prix_vente: Optional[float] = None
     date_fabrication: Optional[str] = None  # YYYY-MM-DD
     date_expiration: Optional[str] = None   # YYYY-MM-DD
+    numero_lot_fournisseur: Optional[str] = None
 
 
 def _ligne_to_dict(l: LigneFacture) -> dict:
@@ -37,6 +38,7 @@ def _ligne_to_dict(l: LigneFacture) -> dict:
         "montant_ligne": l.montant_ligne, "source": l.source,
         "date_fabrication": l.date_fabrication, "date_expiration": l.date_expiration,
         "date_expiration_manquante": l.date_expiration_manquante == "true",
+        "numero_lot_fournisseur": l.numero_lot_fournisseur,
         "facture_date": str(l.facture.date), "fournisseur_nom": l.facture.fournisseur_nom,
         "type_facture": l.facture.type_facture, "numero_facture": l.facture.numero_facture,
         "facture_status": l.facture.statut, "facture_cree_par_id": l.facture.cree_par_id,
@@ -80,6 +82,7 @@ async def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = 
         quantite=req.quantite, prix_unitaire=req.prix_unitaire, prix_vente=req.prix_vente,
         date_fabrication=req.date_fabrication, date_expiration=req.date_expiration,
         date_expiration_manquante="true" if date_manquante else "false",
+        numero_lot_fournisseur=req.numero_lot_fournisseur,
         montant_ligne=round(req.quantite * req.prix_unitaire, 2), source="manuel",
     )
     db.add(ligne)

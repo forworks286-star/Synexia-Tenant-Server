@@ -6,20 +6,18 @@ from ..core.ws_manager import ws_manager
 
 
 async def creer_alerte(db: Session, type: str, niveau: str, message: str,
-                        source: str, meta: dict | None = None) -> Alerte:
-    """Source unique de vérité pour toute création d'alerte dans le système.
-    Persiste l'alerte en DB, puis diffuse en temps réel EXACTEMENT le même
-    format que GET /api/v1/alertes, pour garantir la cohérence entre
-    reload (REST) et real-time (WebSocket)."""
+                        source: str, meta: dict | None = None,
+                        destinataire_id: int | None = None) -> Alerte:
     alerte = Alerte(
         type=type, niveau=niveau, message=message,
         source_module=source, metadata_json=meta or {},
-        timestamp=datetime.utcnow(), lu=False,
+        timestamp=datetime.utcnow(), lu=False, destinataire_id=destinataire_id,
     )
     db.add(alerte)
     db.commit()
     db.refresh(alerte)
-    await ws_manager.broadcast({
+
+    payload = {
         "type": "new_alert",
         "id": alerte.id,
         "level": alerte.niveau,
@@ -29,6 +27,10 @@ async def creer_alerte(db: Session, type: str, niveau: str, message: str,
         "source_module": alerte.source_module,
         "metadata_json": alerte.metadata_json,
         "created_at": alerte.timestamp.isoformat() + "Z",
-        "is_read": alerte.lu,
-    })
+        "is_read": False,
+    }
+    if destinataire_id:
+        await ws_manager.send_to_user(destinataire_id, payload)
+    else:
+        await ws_manager.broadcast(payload)
     return alerte

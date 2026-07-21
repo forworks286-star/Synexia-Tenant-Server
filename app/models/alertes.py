@@ -13,6 +13,16 @@ class Alerte(Base):
     metadata_json = Column(JSON, default=dict)
     timestamp = Column(DateTime, nullable=False)
     lu = Column(Boolean, default=False)
+    destinataire_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class AlerteLue(Base):
+    __tablename__ = "alertes_lues"
+
+    id = Column(Integer, primary_key=True)
+    alerte_id = Column(Integer, ForeignKey("alertes.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    date_lecture = Column(DateTime, nullable=False)
 
 
 class CommandeAuto(Base):

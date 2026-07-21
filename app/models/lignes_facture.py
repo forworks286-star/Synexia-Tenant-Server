@@ -20,6 +20,7 @@ class LigneFacture(Base):
     date_fabrication = Column(String, nullable=True)  # format YYYY-MM-DD
     date_expiration = Column(String, nullable=True)   # format YYYY-MM-DD
     date_expiration_manquante = Column(String, default="false")  # "true" si Lot autorise sans date (alerte)
+    numero_lot_fournisseur = Column(String, nullable=True)
     raw_json = Column(JSON, default=dict)
     facture = relationship("Facture", foreign_keys=[facture_id])
     produit = relationship("Produit", foreign_keys=[produit_id])

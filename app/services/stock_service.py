@@ -39,11 +39,23 @@ def _generer_sku(nom: str) -> str:
     return f"{base}-{datetime.utcnow().strftime('%y%m%d%H%M%S')}"
 
 
+def _generer_numero_lot(db: Session, sku: str, date_reception) -> str:
+    date_str = (date_reception.strftime("%Y%m%d") if hasattr(date_reception, "strftime")
+                else datetime.utcnow().strftime("%Y%m%d"))
+    prefixe = f"{sku}-{date_str}-"
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    count = db.query(Lot).filter(Lot.numero_lot.like(f"{prefixe}%")).count()
+    if count < 26:
+        suffixe = alphabet[count]
+    else:
+        suffixe = f"{alphabet[count // 26 - 1]}{alphabet[count % 26]}"
+    return f"{prefixe}{suffixe}"
+
+
 def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, current_user):
     """Appelée uniquement à la validation d'une facture.
     achat/ajustement_manuel -> crée un Lot par ligne (entrée), crée le Produit si absent.
     vente -> décrémente les lots existants en respectant FEFO."""
-    lettres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     est_sortie = facture.type_facture == "vente"
 
     for idx, ligne in enumerate(lignes):
@@ -74,7 +86,7 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
         ligne.produit_id = produit.id
 
         if not est_sortie:
-            numero_lot = f"LOT-{facture.numero_facture or facture.id}-{lettres[idx % 26]}"
+            numero_lot = _generer_numero_lot(db, produit.sku, facture.date)
             date_exp = None
             if ligne.date_expiration:
                 try:
@@ -89,6 +101,7 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
                     date_fab = None
             lot = Lot(
                 produit_id=produit.id, numero_lot=numero_lot,
+                numero_lot_fournisseur=ligne.numero_lot_fournisseur,
                 quantite_physique=int(ligne.quantite), statut="disponible",
                 date_entree_stock=datetime.utcnow(), facture_id=facture.id,
                 date_expiration=date_exp, date_fabrication=date_fab,

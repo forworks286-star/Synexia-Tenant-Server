@@ -6,11 +6,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
-from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom
+from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.core.auto_migrate import auto_migrate_columns
-from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture, demandes as demandes_api, bom as bom_api
+from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture, demandes as demandes_api, bom as bom_api, appairage as appairage_api
 from app.license_client import verifier_licence_au_demarrage
 
 
@@ -55,6 +55,7 @@ app.include_router(dashboard.router,    prefix="/api/v1/dashboard",    tags=["Da
 app.include_router(users.router,        prefix="/api/v1/users",        tags=["Users"])
 app.include_router(demandes_api.router, prefix="/api/v1/demandes",     tags=["Demandes de modification"])
 app.include_router(bom_api.router,      prefix="/api/v1/bom",          tags=["BOM / Fabrication"])
+app.include_router(appairage_api.router, prefix="/api/v1/appairage",   tags=["Appairage"])
 
 
 @app.get("/", tags=["Sante"])
@@ -68,8 +69,17 @@ def health():
 
 
 @app.websocket("/ws/alertes")
-async def websocket_alertes(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+async def websocket_alertes(websocket: WebSocket, token: str | None = None):
+    from app.core.security import decode_token
+    user_id = None
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("type") == "access":
+            try:
+                user_id = int(payload.get("sub"))
+            except (TypeError, ValueError):
+                user_id = None
+    await ws_manager.connect(websocket, user_id)
     try:
         while True:
             await websocket.receive_text()

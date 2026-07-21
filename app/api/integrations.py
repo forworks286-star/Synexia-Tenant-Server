@@ -329,6 +329,7 @@ class LigneOcr(BaseModel):
     prix_vente: Optional[float] = None
     date_fabrication: Optional[str] = None  # YYYY-MM-DD, lu sur la facture/colis si visible
     date_expiration: Optional[str] = None   # YYYY-MM-DD
+    numero_lot_fournisseur: Optional[str] = None
 
 
 class OcrResultRequest(BaseModel):
@@ -347,6 +348,7 @@ class OcrResultRequest(BaseModel):
     raw_json: Dict[str, Any] = {}
     lignes: List[LigneOcr] = []
     cree_par_id: Optional[int] = None  # utilisateur mobile ayant declenche la photo
+    code_appairage: Optional[str] = None
 
 
 @router.post("/ocr-result")
@@ -387,6 +389,7 @@ async def recevoir_resultat_ocr(
                 quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
                 date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
                 date_expiration_manquante="true" if date_manquante else "false",
+                numero_lot_fournisseur=l.numero_lot_fournisseur,
                 montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="ocr",
             ))
         db.commit()
@@ -413,6 +416,22 @@ async def recevoir_resultat_ocr(
         "montant_ttc": req.montant_ttc,
         "incoherence_detectee": incoherence,
     })
+
+
+    if req.code_appairage:
+        from ..models.appairage import SessionAppairage
+        session = db.query(SessionAppairage).filter(
+            SessionAppairage.code == req.code_appairage, SessionAppairage.statut == "scanne"
+        ).first()
+        if session:
+            session.statut = "complete"
+            session.facture_id = facture.id
+            db.commit()
+            await ws_manager.send_to_user(session.cree_par_id, {
+                "type": "appairage_update", "code": req.code_appairage,
+                "statut": "complete", "facture_id": facture.id,
+            })
+
     return {"status": "received", "id": facture.id, "incoherence_detectee": incoherence}
 
 

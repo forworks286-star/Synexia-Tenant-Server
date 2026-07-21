@@ -1,29 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from datetime import datetime
-from pydantic import BaseModel
-from typing import Optional
+from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.security import get_current_user, verify_device_key
-from ..core.ws_manager import ws_manager
-from ..models.alertes import Alerte
+from ..core.security import get_current_user
+from ..models.alertes import Alerte, AlerteLue
 
 router = APIRouter()
 
 
 @router.get("")
-def get_alertes(
-    page: int = 1, limit: int = 50,
-    non_lues: Optional[bool] = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    query = db.query(Alerte).order_by(Alerte.timestamp.desc())
-    if non_lues is True:
-        query = query.filter(Alerte.lu == False)
+def get_alertes(page: int = 1, limit: int = 50,
+                db: Session = Depends(get_db),
+                current_user=Depends(get_current_user)):
+    query = db.query(Alerte).filter(
+        (Alerte.destinataire_id.is_(None)) | (Alerte.destinataire_id == current_user.id)
+    ).order_by(Alerte.timestamp.desc())
     total = query.count()
     alertes = query.offset((page - 1) * limit).limit(limit).all()
+
+    lues_ids = {r[0] for r in db.query(AlerteLue.alerte_id)
+                .filter(AlerteLue.user_id == current_user.id).all()}
     return {
         "total": total, "page": page, "limit": limit,
         "results": [
@@ -31,7 +28,8 @@ def get_alertes(
                 "id": a.id, "level": a.niveau, "title": a.type, "type": a.type,
                 "message": a.message, "source_module": a.source_module,
                 "metadata_json": a.metadata_json,
-                "created_at": a.timestamp.isoformat() + "Z", "is_read": a.lu,
+                "created_at": a.timestamp.isoformat() + "Z",
+                "is_read": a.id in lues_ids,
             } for a in alertes
         ],
     }
@@ -40,7 +38,15 @@ def get_alertes(
 @router.put("/read-all")
 def mark_all_read(db: Session = Depends(get_db),
                   current_user=Depends(get_current_user)):
-    db.query(Alerte).filter(Alerte.lu == False).update({"lu": True})
+    visibles = db.query(Alerte.id).filter(
+        (Alerte.destinataire_id.is_(None)) | (Alerte.destinataire_id == current_user.id)
+    ).all()
+    deja_lues = {r[0] for r in db.query(AlerteLue.alerte_id)
+                 .filter(AlerteLue.user_id == current_user.id).all()}
+    now = datetime.utcnow()
+    for (alerte_id,) in visibles:
+        if alerte_id not in deja_lues:
+            db.add(AlerteLue(alerte_id=alerte_id, user_id=current_user.id, date_lecture=now))
     db.commit()
     return {"status": "ok"}
 
@@ -51,59 +57,12 @@ def mark_read(alert_id: int, db: Session = Depends(get_db),
     a = db.query(Alerte).filter(Alerte.id == alert_id).first()
     if not a:
         raise HTTPException(status_code=404, detail="error_not_found")
-    a.lu = True
-    db.commit()
+    if a.destinataire_id and a.destinataire_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_alerte_pas_a_vous")
+    deja = db.query(AlerteLue).filter(
+        AlerteLue.alerte_id == alert_id, AlerteLue.user_id == current_user.id
+    ).first()
+    if not deja:
+        db.add(AlerteLue(alerte_id=alert_id, user_id=current_user.id, date_lecture=datetime.utcnow()))
+        db.commit()
     return {"status": "ok"}
-
-
-class AlerteInternalRequest(BaseModel):
-    type: str
-    niveau: str = "info"
-    message: str
-    source_module: str
-    metadata_json: dict = {}
-
-
-@router.post("/internal")
-async def create_alerte_internal(
-    req: AlerteInternalRequest,
-    db: Session = Depends(get_db),
-    _=Depends(verify_device_key),
-):
-    """Internal endpoint — called by integration services. Protected by X-Device-Key."""
-    from ..services.alertes_service import creer_alerte
-    alerte = await creer_alerte(
-        db, type=req.type, niveau=req.niveau, message=req.message,
-        source=req.source_module, meta=req.metadata_json,
-    )
-    return {"status": "ok", "id": alerte.id}
-
-@router.get("/active")
-def get_active_alarms(db: Session = Depends(get_db),
-                      current_user=Depends(get_current_user)):
-    from ..models.integrations import ActiveAlarm, AlarmHistory
-    now = datetime.utcnow()
-    active = db.query(ActiveAlarm).order_by(ActiveAlarm.started_at.desc()).all()
-    history = db.query(AlarmHistory).order_by(
-        AlarmHistory.resolved_at.desc()).limit(100).all()
-    return {
-        "active": [
-            {
-                "id": a.id, "device_id": a.device_id,
-                "module": a.module, "zone_id": a.zone_id,
-                "alarm_key": a.alarm_key, "niveau": a.niveau,
-                "message": a.message, "started_at": str(a.started_at),
-                "duration_minutes": int((now - a.started_at).total_seconds() / 60),
-            } for a in active
-        ],
-        "history": [
-            {
-                "id": h.id, "device_id": h.device_id,
-                "module": h.module, "zone_id": h.zone_id,
-                "alarm_key": h.alarm_key, "niveau": h.niveau,
-                "message": h.message, "started_at": str(h.started_at),
-                "resolved_at": str(h.resolved_at),
-                "duration_minutes": h.duration_minutes,
-            } for h in history
-        ],
-    }
