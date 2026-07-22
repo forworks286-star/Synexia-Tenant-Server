@@ -62,6 +62,11 @@ class LigneManuelleRequest(BaseModel):
     date_fabrication: Optional[str] = None
     date_expiration: Optional[str] = None
     numero_lot_fournisseur: Optional[str] = None
+    nouveau_categorie: Optional[str] = None
+    nouveau_code_barre: Optional[str] = None
+    nouveau_unite_mesure: Optional[str] = None
+    nouveau_seuil_critique: Optional[int] = None
+    nouveau_emplacement: Optional[str] = None
 
 
 class FactureManuelleRequest(BaseModel):
@@ -73,6 +78,9 @@ class FactureManuelleRequest(BaseModel):
     montant_tva: float = 0.0
     montant_ttc: float = 0.0
     taux_tva: float = 19.0
+    fournisseur_nif: Optional[str] = None
+    fournisseur_nis: Optional[str] = None
+    fournisseur_rc: Optional[str] = None
     motif_creation_manuelle: str
     lignes: List[LigneManuelleRequest] = []
     compte_rendu_demande: Optional[str] = None
@@ -96,6 +104,8 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
         fournisseur_nom=req.fournisseur_nom, date=date_facture,
         montant_ht=req.montant_ht, montant_tva=req.montant_tva, montant_ttc=req.montant_ttc,
         taux_tva=req.taux_tva, numero_facture=_generate_numero_facture(db),
+        fournisseur_nif=req.fournisseur_nif, fournisseur_nis=req.fournisseur_nis,
+        fournisseur_rc=req.fournisseur_rc,
         type_facture=req.type_facture, type_stock=req.type_stock,
         statut="en_attente_modification" if req.compte_rendu_demande else "pending",
         cree_manuellement=True, motif_creation_manuelle=req.motif_creation_manuelle.strip(),
@@ -121,6 +131,9 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
             date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
             date_expiration_manquante="true" if date_manquante else "false",
             numero_lot_fournisseur=l.numero_lot_fournisseur,
+            nouveau_categorie=l.nouveau_categorie, nouveau_code_barre=l.nouveau_code_barre,
+            nouveau_unite_mesure=l.nouveau_unite_mesure, nouveau_seuil_critique=l.nouveau_seuil_critique,
+            nouveau_emplacement=l.nouveau_emplacement,
             montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="manuel",
         ))
     db.commit()

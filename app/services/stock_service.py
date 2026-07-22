@@ -76,8 +76,11 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
             produit = Produit(
                 sku=sku, nom=ligne.designation_brute or "Produit sans nom",
                 qr_code=f"QR-{sku}", type_stock=ligne.type_stock,
+                categorie=ligne.nouveau_categorie, code_barre=ligne.nouveau_code_barre,
+                unite_mesure=ligne.nouveau_unite_mesure or "piece",
+                seuil_critique=ligne.nouveau_seuil_critique or 10,
                 prix_achat=ligne.prix_unitaire, prix_moyen_pondere=ligne.prix_unitaire,
-                prix_vente=ligne.prix_unitaire,
+                prix_vente=ligne.prix_vente or ligne.prix_unitaire,
                 cree_par_id=current_user.id, date_creation=datetime.utcnow(),
             )
             db.add(produit)
@@ -103,6 +106,7 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
                 produit_id=produit.id, numero_lot=numero_lot,
                 numero_lot_fournisseur=ligne.numero_lot_fournisseur,
                 quantite_physique=int(ligne.quantite), statut="disponible",
+                emplacement=ligne.nouveau_emplacement,
                 date_entree_stock=datetime.utcnow(), facture_id=facture.id,
                 date_expiration=date_exp, date_fabrication=date_fab,
             )
