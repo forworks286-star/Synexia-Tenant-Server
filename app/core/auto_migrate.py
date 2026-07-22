@@ -44,4 +44,13 @@ def auto_migrate_columns(engine, base):
                 stmt = f'ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS "{column.name}" {sql_type}{default_clause};'
                 print(f"[auto-migrate] {stmt}")
                 conn.execute(text(stmt))
+
+            model_columns = {c.name for c in table.columns}
+            for db_col in inspector.get_columns(table_name):
+                if db_col["name"] in model_columns:
+                    continue
+                if not db_col.get("nullable", True):
+                    stmt = f'ALTER TABLE {table_name} ALTER COLUMN "{db_col["name"]}" DROP NOT NULL;'
+                    print(f"[auto-migrate] {stmt}")
+                    conn.execute(text(stmt))
         conn.commit()
