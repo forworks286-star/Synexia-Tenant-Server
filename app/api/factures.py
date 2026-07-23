@@ -44,7 +44,7 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
     if statut:
         query = query.filter(Facture.statut == statut)
     else:
-        query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee"]))
+        query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee", "ocr_a_verifier"]))
     if current_user.role not in ("admin", "manager"):
         query = query.filter(Facture.cree_par_id == current_user.id)
     total = query.count()
@@ -236,6 +236,82 @@ async def completer_modification(facture_id: int, req: CompleterModificationRequ
                       table_cible="factures", enregistrement_id=facture.id)
     await ws_manager.broadcast({"type": "new_facture", "id": facture.id, "cree_manuellement": True})
     return _facture_to_dict(facture)
+
+
+class LigneConfirmationOcr(BaseModel):
+    id: int
+    emplacement: Optional[str] = None
+    nouveau_categorie: Optional[str] = None
+    nouveau_code_barre: Optional[str] = None
+    nouveau_unite_mesure: Optional[str] = None
+    nouveau_seuil_critique: Optional[int] = None
+
+
+class ConfirmerOcrRequest(BaseModel):
+    lignes: List[LigneConfirmationOcr] = []
+
+
+@router.put("/{facture_id}/emplacements-ocr")
+async def enregistrer_emplacements_ocr(facture_id: int, req: ConfirmerOcrRequest, db: Session = Depends(get_db),
+                                        current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.cree_par_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_facture_pas_a_vous")
+    if facture.statut not in ("ocr_a_verifier", "en_attente_modification", "modification_autorisee"):
+        raise HTTPException(status_code=400, detail="error_facture_invalide")
+
+    for l in req.lignes:
+        ligne = db.query(LigneFacture).filter(LigneFacture.id == l.id, LigneFacture.facture_id == facture_id).first()
+        if not ligne:
+            continue
+        if l.emplacement is not None:
+            ligne.nouveau_emplacement = l.emplacement
+        if not ligne.produit_id:
+            if l.nouveau_categorie is not None:
+                ligne.nouveau_categorie = l.nouveau_categorie
+            if l.nouveau_code_barre is not None:
+                ligne.nouveau_code_barre = l.nouveau_code_barre
+            if l.nouveau_unite_mesure is not None:
+                ligne.nouveau_unite_mesure = l.nouveau_unite_mesure
+            if l.nouveau_seuil_critique is not None:
+                ligne.nouveau_seuil_critique = l.nouveau_seuil_critique
+
+    db.commit()
+    return {"status": "ok"}
+
+@router.put("/{facture_id}/confirmer-ocr")
+async def confirmer_ocr(facture_id: int, req: ConfirmerOcrRequest, db: Session = Depends(get_db),
+                         current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.cree_par_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_facture_pas_a_vous")
+    if facture.statut != "ocr_a_verifier":
+        raise HTTPException(status_code=400, detail="error_facture_pas_en_verification")
+
+    for l in req.lignes:
+        ligne = db.query(LigneFacture).filter(LigneFacture.id == l.id, LigneFacture.facture_id == facture_id).first()
+        if not ligne:
+            continue
+        if l.emplacement is not None:
+            ligne.nouveau_emplacement = l.emplacement
+        if not ligne.produit_id:
+            if l.nouveau_categorie is not None:
+                ligne.nouveau_categorie = l.nouveau_categorie
+            if l.nouveau_code_barre is not None:
+                ligne.nouveau_code_barre = l.nouveau_code_barre
+            if l.nouveau_unite_mesure is not None:
+                ligne.nouveau_unite_mesure = l.nouveau_unite_mesure
+            if l.nouveau_seuil_critique is not None:
+                ligne.nouveau_seuil_critique = l.nouveau_seuil_critique
+
+    facture.statut = "pending"
+    db.commit()
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
+    return {"status": "ok"}
 
 @router.get("/{facture_id}")
 def get_facture(facture_id: int, db: Session = Depends(get_db),

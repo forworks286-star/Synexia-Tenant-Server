@@ -366,7 +366,7 @@ async def recevoir_resultat_ocr(
         fournisseur_nif=req.fournisseur_nif, fournisseur_nis=req.fournisseur_nis,
         fournisseur_rc=req.fournisseur_rc,
         image_url=req.image_url, ocr_raw_json=req.raw_json,
-        incoherence_detectee=incoherence, statut="pending",
+        incoherence_detectee=incoherence, statut="ocr_a_verifier",
         type_facture=req.type_facture, cree_par_id=req.cree_par_id,
     )
     db.add(facture)
