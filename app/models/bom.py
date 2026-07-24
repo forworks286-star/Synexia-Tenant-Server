@@ -26,6 +26,7 @@ class LigneBOM(Base):
     bom_id = Column(Integer, ForeignKey("boms.id"), nullable=False)
     composant_produit_id = Column(Integer, ForeignKey("produits.id"), nullable=False)
     quantite_necessaire = Column(Float, nullable=False)  # pour 1 unite de produit fini
+    taux_perte = Column(Float, default=0.0)  # % de perte/gaspillage (0-100)
 
     bom = relationship("BOM", back_populates="lignes")
     composant = relationship("Produit", foreign_keys=[composant_produit_id])
