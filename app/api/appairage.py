@@ -2,6 +2,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
 from pydantic import BaseModel
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -17,6 +18,7 @@ DUREE_VALIDITE_MINUTES = 3
 class GenererCodeRequest(BaseModel):
     type_stock: str
     type_facture: str = "achat"
+    bon_commande_id: Optional[int] = None
 
 
 @router.post("/generer")
@@ -31,6 +33,7 @@ def generer_code(req: GenererCodeRequest, db: Session = Depends(get_db),
     session = SessionAppairage(
         code=code, cree_par_id=current_user.id,
         type_stock=req.type_stock, type_facture=req.type_facture,
+        bon_commande_id=req.bon_commande_id,
         statut="attente", date_creation=datetime.utcnow(),
         date_expiration=datetime.utcnow() + timedelta(minutes=DUREE_VALIDITE_MINUTES),
     )

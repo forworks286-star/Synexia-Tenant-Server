@@ -373,9 +373,9 @@ async def recevoir_resultat_ocr(
     db.commit()
     db.refresh(facture)
 
+    from ..models.lignes_facture import LigneFacture
     date_manquante_globale = False
     if req.lignes:
-        from ..models.lignes_facture import LigneFacture
         from ..services.stock_service import trouver_produit_correspondant as _match
         for l in req.lignes:
             produit_existant = _match(db, l.designation)
@@ -426,6 +426,19 @@ async def recevoir_resultat_ocr(
         if session:
             session.statut = "complete"
             session.facture_id = facture.id
+            if session.bon_commande_id:
+                from ..models.bon_commande import BonCommande
+                from ..services.comparaison_bc import comparer_avec_bc
+                bc = db.query(BonCommande).filter(BonCommande.id == session.bon_commande_id).first()
+                if bc:
+                    lignes_crees = db.query(LigneFacture).filter(LigneFacture.facture_id == facture.id).all()
+                    ecarts = comparer_avec_bc(db, bc, lignes_crees, fournisseur_nom=facture.fournisseur_nom)
+                    facture.bon_commande_id = bc.id
+                    if ecarts:
+                        facture.statut_apres_ecart = facture.statut
+                        facture.ecarts_bc = ecarts
+                        facture.statut = "ecart_a_signaler"
+                    bc.statut = "recu"
             db.commit()
             await ws_manager.send_to_user(session.cree_par_id, {
                 "type": "appairage_update", "code": req.code_appairage,

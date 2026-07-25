@@ -30,6 +30,9 @@ def _facture_to_dict(f: Facture) -> dict:
         "motif_creation_manuelle": f.motif_creation_manuelle,
         "cree_par_id": f.cree_par_id,
         "a_ete_modifiee": f.a_ete_modifiee,
+        "bon_commande_id": f.bon_commande_id,
+        "ecarts_bc": f.ecarts_bc,
+        "ecart_compte_rendu": f.ecart_compte_rendu,
         "stamp_detected": True, "signature_detected": True,
     }
 
@@ -44,7 +47,7 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
     if statut:
         query = query.filter(Facture.statut == statut)
     else:
-        query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee", "ocr_a_verifier"]))
+        query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee", "ocr_a_verifier", "ecart_a_signaler", "ecart_a_valider"]))
     if current_user.role not in ("admin", "manager"):
         query = query.filter(Facture.cree_par_id == current_user.id)
     total = query.count()
@@ -84,7 +87,7 @@ class FactureManuelleRequest(BaseModel):
     motif_creation_manuelle: str
     lignes: List[LigneManuelleRequest] = []
     compte_rendu_demande: Optional[str] = None
-
+    bon_commande_id: Optional[int] = None
 
 @router.post("/manuelle")
 async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depends(get_db),
@@ -138,6 +141,21 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
         ))
     db.commit()
     db.refresh(facture)
+
+    if req.bon_commande_id:
+        from ..models.bon_commande import BonCommande
+        from ..services.comparaison_bc import comparer_avec_bc
+        bc = db.query(BonCommande).filter(BonCommande.id == req.bon_commande_id).first()
+        if bc:
+            lignes_crees = db.query(LigneFacture).filter(LigneFacture.facture_id == facture.id).all()
+            ecarts = comparer_avec_bc(db, bc, lignes_crees, fournisseur_nom=facture.fournisseur_nom)
+            facture.bon_commande_id = bc.id
+            if ecarts:
+                facture.statut_apres_ecart = facture.statut
+                facture.ecarts_bc = ecarts
+                facture.statut = "ecart_a_signaler"
+            bc.statut = "recu"
+            db.commit()
 
     enregistrer_audit(db, user_id=current_user.id, action="facture_creee_manuellement",
                       table_cible="factures", enregistrement_id=facture.id,
@@ -311,6 +329,75 @@ async def confirmer_ocr(facture_id: int, req: ConfirmerOcrRequest, db: Session =
     facture.statut = "pending"
     db.commit()
     await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
+    return {"status": "ok"}
+
+class EnvoyerEcartRequest(BaseModel):
+    compte_rendu: str
+
+
+@router.put("/{facture_id}/envoyer-ecart")
+async def envoyer_ecart(facture_id: int, req: EnvoyerEcartRequest, db: Session = Depends(get_db),
+                         current_user=Depends(get_current_user)):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.cree_par_id != current_user.id:
+        raise HTTPException(status_code=403, detail="error_facture_pas_a_vous")
+    if facture.statut != "ecart_a_signaler":
+        raise HTTPException(status_code=400, detail="error_facture_invalide")
+    if not req.compte_rendu or not req.compte_rendu.strip():
+        raise HTTPException(status_code=400, detail="error_compte_rendu_requis")
+
+    facture.ecart_compte_rendu = req.compte_rendu.strip()
+    facture.statut = "ecart_a_valider"
+    db.commit()
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
+    from ..services.alertes_service import creer_alerte
+    await creer_alerte(
+        db, type="ecart_bc", niveau="warning",
+        message=f"Écart bon de commande signalé par {current_user.full_name} — facture #{facture.id}",
+        source="bons_commande", meta={"facture_id": facture.id},
+    )
+    return {"status": "ok"}
+
+
+@router.put("/{facture_id}/approuver-ecart")
+async def approuver_ecart(facture_id: int, db: Session = Depends(get_db),
+                           current_user=Depends(require_role("admin", "manager"))):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.statut != "ecart_a_valider":
+        raise HTTPException(status_code=400, detail="error_facture_invalide")
+    facture.statut = facture.statut_apres_ecart or "pending"
+    db.commit()
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
+    return {"status": "ok"}
+
+
+@router.put("/{facture_id}/rejeter-ecart")
+async def rejeter_ecart(facture_id: int, db: Session = Depends(get_db),
+                         current_user=Depends(require_role("admin", "manager"))):
+    facture = db.query(Facture).filter(Facture.id == facture_id).first()
+    if not facture:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    if facture.statut != "ecart_a_valider":
+        raise HTTPException(status_code=400, detail="error_facture_invalide")
+    facture.statut = "annulee"
+
+    from ..models.demandes import DemandeModification
+    demande_liee = db.query(DemandeModification).filter(
+        DemandeModification.facture_id == facture.id, DemandeModification.statut == "pending"
+    ).first()
+    if demande_liee:
+        demande_liee.statut = "refuse"
+        demande_liee.motif_refus = "Facture annulée suite au rejet de l'écart bon de commande"
+        demande_liee.traite_par_id = current_user.id
+        demande_liee.date_traitement = datetime.utcnow()
+
+    db.commit()
+    await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
+    await ws_manager.broadcast({"type": "demande_update"})
     return {"status": "ok"}
 
 @router.get("/{facture_id}")

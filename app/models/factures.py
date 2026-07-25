@@ -34,3 +34,8 @@ class Facture(Base):
     # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
     ocr_raw_json = Column(JSON, default=dict)
     incoherence_detectee = Column(Boolean, default=False)  # alerte champ en rouge
+
+    bon_commande_id = Column(Integer, ForeignKey("bons_commande.id"), nullable=True)
+    ecarts_bc = Column(JSON, nullable=True)
+    ecart_compte_rendu = Column(String, nullable=True)
+    statut_apres_ecart = Column(String, nullable=True)
