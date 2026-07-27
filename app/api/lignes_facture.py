@@ -92,8 +92,8 @@ async def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = 
     db.commit()
     db.refresh(ligne)
     if date_manquante:
-        from ..services.alertes_service import creer_alerte
-        await creer_alerte(
+        from ..services.alertes_service import notifier_admins
+        await notifier_admins(
             db, type="facture", niveau="warning",
             message=f"Date d'expiration manquante — {ligne.designation_brute} (facture #{facture_id})",
             source="lignes_facture",

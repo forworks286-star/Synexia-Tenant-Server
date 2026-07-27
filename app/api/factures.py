@@ -44,11 +44,12 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
     query = db.query(Facture)
     if type_facture:
         query = query.filter(Facture.type_facture == type_facture)
+    STATUTS_PERSONNELS = ("ocr_a_verifier", "modification_autorisee", "en_attente_modification", "ecart_a_signaler")
     if statut:
         query = query.filter(Facture.statut == statut)
     else:
         query = query.filter(Facture.statut.notin_(["en_attente_modification", "modification_autorisee", "ocr_a_verifier", "ecart_a_signaler", "ecart_a_valider"]))
-    if current_user.role not in ("admin", "manager"):
+    if current_user.role not in ("admin", "manager") or statut in STATUTS_PERSONNELS:
         query = query.filter(Facture.cree_par_id == current_user.id)
     total = query.count()
     factures = query.order_by(Facture.id.desc()).offset((page - 1) * limit).limit(limit).all()
@@ -156,19 +157,20 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
                 facture.statut = "ecart_a_signaler"
             bc.statut = "recu"
             db.commit()
+            await ws_manager.broadcast({"type": "bon_commande_update"})
 
     enregistrer_audit(db, user_id=current_user.id, action="facture_creee_manuellement",
                       table_cible="factures", enregistrement_id=facture.id,
                       apres={"motif": req.motif_creation_manuelle, "nb_lignes": len(req.lignes)})
-    from ..services.alertes_service import creer_alerte
-    await creer_alerte(
+    from ..services.alertes_service import notifier_admins
+    await notifier_admins(
         db, type="facture", niveau="warning",
         message=f"Facture creee manuellement par {current_user.full_name} — verification requise",
         source="facture_manuelle",
         meta={"facture_id": facture.id, "user_id": current_user.id},
     )
     if date_manquante_globale:
-        await creer_alerte(
+        await notifier_admins(
             db, type="facture", niveau="warning",
             message=f"Date(s) d'expiration manquante(s) sur la facture manuelle #{facture.id}",
             source="facture_manuelle",
@@ -182,7 +184,7 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
             statut="pending", date_creation=datetime.utcnow(),
         ))
         db.commit()
-        await creer_alerte(
+        await notifier_admins(
             db, type="demande_modification", niveau="warning",
             message=f"Nouvelle demande de modification — {current_user.full_name} — facture #{facture.id}",
             source="demandes", meta={"facture_id": facture.id},
@@ -352,8 +354,8 @@ async def envoyer_ecart(facture_id: int, req: EnvoyerEcartRequest, db: Session =
     facture.statut = "ecart_a_valider"
     db.commit()
     await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
-    from ..services.alertes_service import creer_alerte
-    await creer_alerte(
+    from ..services.alertes_service import notifier_admins
+    await notifier_admins(
         db, type="ecart_bc", niveau="warning",
         message=f"Écart bon de commande signalé par {current_user.full_name} — facture #{facture.id}",
         source="bons_commande", meta={"facture_id": facture.id},

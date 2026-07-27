@@ -61,7 +61,8 @@ async def creer_demande(req: CreerDemandeRequest, db: Session = Depends(get_db),
     )
     db.add(demande)
     db.commit()
-    await creer_alerte(
+    from ..services.alertes_service import notifier_admins
+    await notifier_admins(
         db, type="demande_modification", niveau="warning",
         message=f"Nouvelle demande de modification — {current_user.full_name} — facture #{facture.id}",
         source="demandes", meta={"facture_id": facture.id},

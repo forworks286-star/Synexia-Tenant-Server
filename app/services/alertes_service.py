@@ -34,3 +34,12 @@ async def creer_alerte(db: Session, type: str, niveau: str, message: str,
     else:
         await ws_manager.broadcast(payload)
     return alerte
+
+
+async def notifier_admins(db: Session, type: str, niveau: str, message: str,
+                           source: str, meta: dict | None = None):
+    from ..models.users import User
+    admins = db.query(User).filter(User.role.in_(["admin", "manager"])).all()
+    for admin in admins:
+        await creer_alerte(db, type=type, niveau=niveau, message=message,
+                            source=source, meta=meta, destinataire_id=admin.id)

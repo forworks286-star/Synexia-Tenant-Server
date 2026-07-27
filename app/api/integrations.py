@@ -11,6 +11,7 @@ from ..models.integrations import CameraEvent, EnergieLog, AutomationEvent, Face
 from ..models.alertes import Alerte
 from ..models.factures import Facture
 from ..services.alertes_service import creer_alerte as _creer_alerte
+from ..services.alertes_service import notifier_admins as _notifier_admins
 
 
 router = APIRouter()
@@ -51,7 +52,7 @@ async def recevoir_camera_event(
     db.commit()
 
     if req.type in ("intrusion", "vol_detecte", "comportement_suspect", "objet_verrouille"):
-        await _creer_alerte(
+        await _notifier_admins(
             db, type="securite", niveau="danger",
             message=f"ALERTE SECURITE: {req.type} — Zone: {req.zone}",
             source="ia_vision",
@@ -59,7 +60,7 @@ async def recevoir_camera_event(
                   "video_clip_url": req.video_clip_url},
         )
     elif req.type == "anomalie":
-        await _creer_alerte(
+        await _notifier_admins(
             db, type="securite", niveau="warning",
             message=f"Anomalie detectee — Camera {req.camera_id} Zone: {req.zone}",
             source="ia_vision",
@@ -98,7 +99,7 @@ async def recevoir_face_id(
     db.commit()
 
     if not req.reconnu or not req.autorise:
-        await _creer_alerte(
+        await _notifier_admins(
             db, type="acces", niveau="danger",
             message=f"Acces refuse — Personne non reconnue — Zone: {req.zone}",
             source="ia_face_id",
@@ -230,7 +231,7 @@ async def recevoir_automation_event(
                 zone_id=header.zone_id, alarm_key=key,
                 niveau=niveau, message=msg, started_at=now,
             ))
-            await _creer_alerte(db, type="automation", niveau=niveau,
+            await _notifier_admins(db, type="automation", niveau=niveau,
                                 message=msg, source="automatique",
                                 meta={"device_id": header.device_id,
                                       "module": header.module,
@@ -395,7 +396,7 @@ async def recevoir_resultat_ocr(
         db.commit()
 
     if date_manquante_globale:
-        await _creer_alerte(
+        await _notifier_admins(
             db, type="facture", niveau="warning",
             message=f"Date(s) d'expiration manquante(s) sur la facture OCR — {req.fournisseur_nom}",
             source="ia_ocr",
@@ -403,7 +404,7 @@ async def recevoir_resultat_ocr(
         )
 
     if incoherence:
-        await _creer_alerte(
+        await _notifier_admins(
             db, type="facture", niveau="warning",
             message=f"Incoherence detectee — {req.fournisseur_nom}",
             source="ia_ocr",
@@ -440,6 +441,7 @@ async def recevoir_resultat_ocr(
                         facture.statut = "ecart_a_signaler"
                     bc.statut = "recu"
             db.commit()
+            await ws_manager.broadcast({"type": "bon_commande_update"})
             await ws_manager.send_to_user(session.cree_par_id, {
                 "type": "appairage_update", "code": req.code_appairage,
                 "statut": "complete", "facture_id": facture.id,
