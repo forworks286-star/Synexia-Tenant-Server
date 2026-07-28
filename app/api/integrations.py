@@ -430,8 +430,19 @@ async def recevoir_resultat_ocr(
             if session.bon_commande_id:
                 from ..models.bon_commande import BonCommande
                 from ..services.comparaison_bc import comparer_avec_bc
-                bc = db.query(BonCommande).filter(BonCommande.id == session.bon_commande_id).first()
-                if bc:
+                claim = db.query(BonCommande).filter(
+                    BonCommande.id == session.bon_commande_id,
+                    BonCommande.statut.in_(["ouvert", "en_cours"]),
+                ).update({"statut": "recu"})
+                if claim == 0:
+                    from ..services.alertes_service import notifier_admins as _notifier_admins2
+                    await _notifier_admins2(
+                        db, type="ecart_bc", niveau="warning",
+                        message=f"Facture OCR #{facture.id} reçue mais le bon de commande associé était déjà utilisé",
+                        source="bons_commande", meta={"facture_id": facture.id},
+                    )
+                else:
+                    bc = db.query(BonCommande).filter(BonCommande.id == session.bon_commande_id).first()
                     lignes_crees = db.query(LigneFacture).filter(LigneFacture.facture_id == facture.id).all()
                     ecarts = comparer_avec_bc(db, bc, lignes_crees, fournisseur_nom=facture.fournisseur_nom)
                     facture.bon_commande_id = bc.id
@@ -439,7 +450,6 @@ async def recevoir_resultat_ocr(
                         facture.statut_apres_ecart = facture.statut
                         facture.ecarts_bc = ecarts
                         facture.statut = "ecart_a_signaler"
-                    bc.statut = "recu"
             db.commit()
             await ws_manager.broadcast({"type": "bon_commande_update"})
             await ws_manager.send_to_user(session.cree_par_id, {

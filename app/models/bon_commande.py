@@ -10,8 +10,9 @@ class BonCommande(Base):
     numero_bc = Column(String, unique=True, nullable=False)
     type_stock = Column(String, nullable=False)
     fournisseur_nom = Column(String, nullable=True)
-    statut = Column(String, default="ouvert")
+    statut = Column(String, default="ouvert")  # ouvert | en_cours | recu | ferme
     cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reserve_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date_creation = Column(DateTime, nullable=False)
 
     lignes = relationship("LigneBonCommande", back_populates="bon_commande", cascade="all, delete-orphan")

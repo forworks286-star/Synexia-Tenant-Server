@@ -44,7 +44,7 @@ def get_factures(page: int = 1, limit: int = 50, type_facture: Optional[str] = N
     query = db.query(Facture)
     if type_facture:
         query = query.filter(Facture.type_facture == type_facture)
-    STATUTS_PERSONNELS = ("ocr_a_verifier", "modification_autorisee", "en_attente_modification", "ecart_a_signaler")
+    STATUTS_PERSONNELS = ("ocr_a_verifier", "modification_autorisee", "ecart_a_signaler")
     if statut:
         query = query.filter(Facture.statut == statut)
     else:
@@ -145,7 +145,24 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
 
     if req.bon_commande_id:
         from ..models.bon_commande import BonCommande
+        from sqlalchemy import or_  # <-- AJOUTER CET IMPORT
         from ..services.comparaison_bc import comparer_avec_bc
+        
+        # Remplacer la requête simple par une requête avec conditions
+        claim = db.query(BonCommande).filter(
+            BonCommande.id == req.bon_commande_id,
+            BonCommande.statut.in_(["ouvert", "en_cours"]),  # Statuts autorisés
+            or_(
+                BonCommande.reserve_par_id.is_(None),  # Pas réservé
+                BonCommande.reserve_par_id == current_user.id  # Réservé par l'utilisateur actuel
+            )
+        ).update({"statut": "recu"})
+        db.commit()
+        
+        if claim == 0:
+            raise HTTPException(status_code=409, detail="error_bon_commande_deja_utilise")
+        
+        # Récupérer le BC pour la comparaison
         bc = db.query(BonCommande).filter(BonCommande.id == req.bon_commande_id).first()
         if bc:
             lignes_crees = db.query(LigneFacture).filter(LigneFacture.facture_id == facture.id).all()
@@ -155,9 +172,8 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
                 facture.statut_apres_ecart = facture.statut
                 facture.ecarts_bc = ecarts
                 facture.statut = "ecart_a_signaler"
-            bc.statut = "recu"
-            db.commit()
-            await ws_manager.broadcast({"type": "bon_commande_update"})
+        
+        await ws_manager.broadcast({"type": "bon_commande_update"})
 
     enregistrer_audit(db, user_id=current_user.id, action="facture_creee_manuellement",
                       table_cible="factures", enregistrement_id=facture.id,

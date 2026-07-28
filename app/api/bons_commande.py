@@ -8,9 +8,9 @@ from ..core.database import get_db
 from ..core.security import get_current_user, require_role
 from ..core.ws_manager import ws_manager
 from ..models.bon_commande import BonCommande, LigneBonCommande
+from sqlalchemy import or_
 
 router = APIRouter()
-
 
 def _bc_to_dict(bc: BonCommande) -> dict:
     return {
@@ -86,6 +86,31 @@ def get_bc(bc_id: int, db: Session = Depends(get_db), current_user=Depends(get_c
     if not bc:
         raise HTTPException(status_code=404, detail="error_not_found")
     return _bc_to_dict(bc)
+
+
+@router.put("/{bc_id}/reserver")
+async def reserver_bc(bc_id: int, db: Session = Depends(get_db),
+                       current_user=Depends(get_current_user)):
+    claim = db.query(BonCommande).filter(
+        BonCommande.id == bc_id, BonCommande.statut == "ouvert"
+    ).update({"statut": "en_cours", "reserve_par_id": current_user.id})
+    db.commit()
+    if claim == 0:
+        raise HTTPException(status_code=409, detail="error_bon_commande_deja_utilise")
+    await ws_manager.broadcast({"type": "bon_commande_update"})
+    return {"status": "ok"}
+
+
+@router.put("/{bc_id}/liberer")
+async def liberer_bc(bc_id: int, db: Session = Depends(get_db),
+                      current_user=Depends(get_current_user)):
+    db.query(BonCommande).filter(
+        BonCommande.id == bc_id, BonCommande.statut == "en_cours",
+        BonCommande.reserve_par_id == current_user.id,
+    ).update({"statut": "ouvert", "reserve_par_id": None})
+    db.commit()
+    await ws_manager.broadcast({"type": "bon_commande_update"})
+    return {"status": "ok"}
 
 
 @router.put("/{bc_id}/fermer")
