@@ -11,7 +11,7 @@ from datetime import date, datetime
 
 db = SessionLocal()
 
-# ── TenantConfig ──────────────────────────────────────────────
+
 existing = db.query(TenantConfig).first()
 if not existing:
     config = TenantConfig(
@@ -34,7 +34,7 @@ else:
     existing.module_ocr_factures = True
 db.commit()
 
-# ── Fournisseurs ──────────────────────────────────────────────
+
 f1 = Fournisseur(nom="TechNet DZ",   contact="0555000001", dernier_prix=800.0,  delai_livraison_jours=7)
 f2 = Fournisseur(nom="NetPro Alger", contact="0556000002", dernier_prix=850.0,  delai_livraison_jours=5)
 f3 = Fournisseur(nom="MediSupply",   contact="0557000003", dernier_prix=1200.0, delai_livraison_jours=3)
@@ -45,7 +45,7 @@ db.commit()
 for f in [f1, f2, f3, f4]:
     db.refresh(f)
 
-# ── Produits ──────────────────────────────────────────────────
+
 p1 = Produit(
     sku="SKU-RJ45-001", nom="Cable RJ45 Cat6", categorie="Reseau",
     qr_code="QR-RJ45-001", code_barre="6111234567890",
@@ -148,7 +148,7 @@ db.commit()
 for p in [p1, p2, p3, p4, p5, p6, p7, p8]:
     db.refresh(p)
 
-# ── Lots ──────────────────────────────────────────────────────
+
 l1a = Lot(produit_id=p1.id, numero_lot="LOT-RJ45-A",
     quantite_physique=142, quantite_reservee=12,
     statut="disponible", emplacement="Allee 3, Rack B",
@@ -205,7 +205,7 @@ db.commit()
 for l in [l1a, l1b, l2a, l3a, l4a, l5a, l5b, l6a, l7a, l8a]:
     db.refresh(l)
 
-# ── Mouvements ────────────────────────────────────────────────
+
 user = db.query(User).first()
 uid = user.id if user else 1
 
@@ -245,7 +245,7 @@ for m in mouvements:
     db.add(m)
 db.commit()
 
-# ── Factures ──────────────────────────────────────────────────
+
 factures = [
     Facture(fournisseur_nom="TechNet DZ",   date=date(2026, 6, 20),
         montant_ht=84033.0, montant_tva=15966.27, montant_ttc=100000.0,
@@ -272,7 +272,7 @@ for f in factures:
     db.add(f)
 db.commit()
 
-# ── Alertes ───────────────────────────────────────────────────
+
 alertes = [
     Alerte(type="securite", niveau="danger",
         message="Intrusion detectee — Allee 3",
@@ -303,7 +303,7 @@ for a in alertes:
     db.add(a)
 db.commit()
 
-# ── Camera Events ─────────────────────────────────────────────
+
 camera_events = [
     CameraEvent(camera_id="CAM-01", type="anomalie",
         zone="Allee 1", raw_data={"confidence": 0.92},
@@ -319,7 +319,7 @@ for e in camera_events:
     db.add(e)
 db.commit()
 
-# ── Energie Logs ──────────────────────────────────────────────
+
 energie_logs = [
     EnergieLog(zone="Allee 1", consommation_kwh="8.5",  mode="normal",
         raw_data={}, timestamp=datetime(2026, 6, 24, 6, 0)),
@@ -338,7 +338,7 @@ for e in energie_logs:
     db.add(e)
 db.commit()
 
-# ── Automation Events (équipe Automatique) ─────────────────────
+
 automation_events = [
     AutomationEvent(
         device_id="PLC_LIGHT_001", device_name="PLC Siemens S7-1200",
@@ -416,7 +416,7 @@ for ae in automation_events:
     db.add(ae)
 db.commit()
 
-# ── Face Events (équipe IA — Access Control) ───────────────────
+
 face_events = [
     FaceEvent(personne_id="EMP-001", nom="Ahmed Benali", reconnu=True,
         confiance="0.98", zone="Entree principale", methode="face_id",
@@ -432,7 +432,7 @@ for fe in face_events:
     db.add(fe)
 db.commit()
 
-# ── Automation — AccessControl (badge RFID + Face ID combiné) ─
+
 ae_access = AutomationEvent(
     device_id="PLC_ACCESS_004", device_name="PLC Access Control Entree",
     device_type="PLC", controller_brand="Siemens", controller_model="S7-1200",
@@ -470,7 +470,7 @@ ae_access = AutomationEvent(
 db.add(ae_access)
 db.commit()
 
-# ── Automation — Energy Management (Smart Power) ───────────────
+
 ae_energy = AutomationEvent(
     device_id="PLC_ENERGY_005", device_name="PLC Smart Power Management",
     device_type="PLC", controller_brand="Schneider", controller_model="TM221",
@@ -511,7 +511,7 @@ ae_energy = AutomationEvent(
 db.add(ae_energy)
 db.commit()
 
-# ── Automation — Fire System ALERTE ACTIVE (test alarm critique) ─
+
 ae_fire_alarm = AutomationEvent(
     device_id="PLC_FIRE_006", device_name="PLC Fire System Zone D",
     device_type="PLC", controller_brand="Schneider", controller_model="M221",
@@ -546,7 +546,7 @@ ae_fire_alarm = AutomationEvent(
 db.add(ae_fire_alarm)
 db.commit()
 
-# ── Automation — Warehouse AGV + Conveyor ──────────────────────
+
 ae_warehouse = AutomationEvent(
     device_id="PLC_WH_007", device_name="PLC Warehouse Automation",
     device_type="PLC", controller_brand="Siemens", controller_model="S7-300",
@@ -585,7 +585,7 @@ ae_warehouse = AutomationEvent(
 db.add(ae_warehouse)
 db.commit()
 
-# ── Automation — SmartLighting éteint (absence) ────────────────
+
 ae_light_off = AutomationEvent(
     device_id="PLC_LIGHT_008", device_name="PLC Lighting Zone E",
     device_type="PLC", controller_brand="Siemens", controller_model="S7-1200",
@@ -623,7 +623,7 @@ ae_light_off = AutomationEvent(
 db.add(ae_light_off)
 db.commit()
 
-# ── Automation — HVAC maintenance requise ─────────────────────
+
 ae_hvac_maint = AutomationEvent(
     device_id="PLC_HVAC_009", device_name="PLC HVAC Zone F",
     device_type="PLC", controller_brand="Siemens", controller_model="S7-1200",
@@ -664,7 +664,7 @@ ae_hvac_maint = AutomationEvent(
 db.add(ae_hvac_maint)
 db.commit()
 
-# ── Face Events supplémentaires ────────────────────────────────
+
 face_events_extra = [
     FaceEvent(personne_id="EMP-003", nom="Mohamed Larbi", reconnu=True,
         confiance="0.97", zone="Zone Stock", methode="badge",
@@ -683,7 +683,7 @@ for fe in face_events_extra:
     db.add(fe)
 db.commit()
 
-# ── Camera Events supplémentaires ─────────────────────────────
+
 camera_events_extra = [
     CameraEvent(camera_id="CAM-04", type="vol_detecte",
         zone="Zone D", personne_id="INCONNU-001", confiance="0.91",
@@ -699,7 +699,7 @@ for ce in camera_events_extra:
     db.add(ce)
 db.commit()
 
-# ── Alertes supplémentaires (automation + face_id) ────────────
+
 alertes_extra = [
     Alerte(type="automation", niveau="danger",
         message="INCENDIE DETECTE — FireSystem — Zone: ZONE_D01",

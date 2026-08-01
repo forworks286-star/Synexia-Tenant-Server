@@ -43,20 +43,19 @@ class AutomationEvent(Base):
 
     id = Column(Integer, primary_key=True)
 
-    # Identification (depuis payload.header)
+   
     device_id = Column(String, nullable=False, index=True)
     device_name = Column(String, nullable=True)
     device_type = Column(String, nullable=True)
     controller_brand = Column(String, nullable=True)
     controller_model = Column(String, nullable=True)
-    module = Column(String, nullable=False, index=True)  # SmartLighting | HVAC | FireSystem | ...
+    module = Column(String, nullable=False, index=True) 
     site_id = Column(String, nullable=True)
     warehouse_id = Column(String, nullable=True)
     zone_id = Column(String, nullable=True, index=True)
     line_id = Column(String, nullable=True)
 
-    # Payload complet tel que reçu (inputs, outputs, states, lighting, hvac,
-    # energy, iot, maintenance, diagnostic, alarms, events)
+   
     payload = Column(JSON, nullable=False, default=dict)
 
     has_alarm = Column(Boolean, default=False)
@@ -65,7 +64,7 @@ class AutomationEvent(Base):
 
 
 class EnergieLog(Base):
-    """Conservé pour compatibilité — historique simplifié de consommation."""
+    
     __tablename__ = "energie_logs"
 
     id = Column(Integer, primary_key=True)
@@ -77,7 +76,6 @@ class EnergieLog(Base):
 
 
 class DeviceState(Base):
-    """آخر حالة لكل جهاز — يُستبدل دائماً، لا يتراكم."""
     __tablename__ = "device_states"
 
     id = Column(Integer, primary_key=True)
@@ -95,7 +93,6 @@ class DeviceState(Base):
 
 
 class ActiveAlarm(Base):
-    """تنبيه نشط الآن فقط — يُحذف عند الحل."""
     __tablename__ = "active_alarms"
 
     id = Column(Integer, primary_key=True)
@@ -109,7 +106,6 @@ class ActiveAlarm(Base):
 
 
 class AlarmHistory(Base):
-    """تاريخ التنبيهات المنتهية — للتقارير والـ PDF."""
     __tablename__ = "alarm_history"
 
     id = Column(Integer, primary_key=True)

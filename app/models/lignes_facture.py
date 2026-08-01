@@ -14,12 +14,12 @@ class LigneFacture(Base):
     type_stock = Column(String, nullable=True)
     quantite = Column(Float, default=0.0)
     prix_unitaire = Column(Float, default=0.0)
-    prix_vente = Column(Float, nullable=True)  # prix de vente cible fixe a la reception
+    prix_vente = Column(Float, nullable=True)  
     montant_ligne = Column(Float, default=0.0)
-    source = Column(String, default="manuel")  # manuel | ocr
-    date_fabrication = Column(String, nullable=True)  # format YYYY-MM-DD
-    date_expiration = Column(String, nullable=True)   # format YYYY-MM-DD
-    date_expiration_manquante = Column(String, default="false")  # "true" si Lot autorise sans date (alerte)
+    source = Column(String, default="manuel")  
+    date_fabrication = Column(String, nullable=True) 
+    date_expiration = Column(String, nullable=True)   
+    date_expiration_manquante = Column(String, default="false")  
     numero_lot_fournisseur = Column(String, nullable=True)
     nouveau_categorie = Column(String, nullable=True)
     nouveau_code_barre = Column(String, nullable=True)

@@ -6,11 +6,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
-from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage, bon_commande
+from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage, bon_commande, iot_zone
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.core.auto_migrate import auto_migrate_columns
-from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture, demandes as demandes_api, bom as bom_api, appairage as appairage_api, bons_commande as bons_commande_api
+from app.api import auth, stock, integrations, factures, alertes, dashboard, users, lignes_facture, demandes as demandes_api, bom as bom_api, appairage as appairage_api, bons_commande as bons_commande_api, iot_zones as iot_zones_api
 from app.license_client import verifier_licence_au_demarrage
 
 
@@ -57,6 +57,7 @@ app.include_router(demandes_api.router, prefix="/api/v1/demandes",     tags=["De
 app.include_router(bom_api.router,      prefix="/api/v1/bom",          tags=["BOM / Fabrication"])
 app.include_router(appairage_api.router, prefix="/api/v1/appairage",   tags=["Appairage"])
 app.include_router(bons_commande_api.router, prefix="/api/v1/bons-commande", tags=["Bons de commande"])
+app.include_router(iot_zones_api.router, prefix="/api/v1/iot-zones", tags=["IoT Zones"])
 
 
 @app.get("/", tags=["Sante"])

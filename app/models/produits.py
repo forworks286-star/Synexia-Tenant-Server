@@ -18,38 +18,38 @@ class Produit(Base):
 
     id = Column(Integer, primary_key=True)
 
-    # Identification (Master Data)
+ 
     sku = Column(String, unique=True, nullable=False)
     nom = Column(String, nullable=False)
     categorie = Column(String, nullable=True)
-    type_stock = Column(String, default="marchandise")  # matiere_premiere | produit_fini | marchandise | consommable
+    type_stock = Column(String, default="marchandise") 
     qr_code = Column(String, unique=True, nullable=False)
     code_barre = Column(String, nullable=True)
     unite_mesure = Column(String, default="piece")
     numero_serie = Column(String, nullable=True)
     photo_url = Column(String, nullable=True)
 
-    # International / Conformité
+
     pays_origine = Column(String, nullable=True)
     statut_produit = Column(String, default="actif")  
-    # Optimisation (KPIs)
+
     seuil_critique = Column(Integer, default=10)
     stock_securite = Column(Integer, default=0)
     quantite_min_commande = Column(Integer, default=1)
     quantite_max_stock = Column(Integer, nullable=True)
 
-    # Financier
+
     prix_achat = Column(Float, default=0.0)
     prix_moyen_pondere = Column(Float, default=0.0)
     prix_vente = Column(Float, default=0.0)
     taux_tva = Column(Float, default=19.0)
     devise = Column(String, default="DZD")
 
-    # Fournisseurs
+   
     fournisseur_id = Column(Integer, ForeignKey("fournisseurs.id"), nullable=True)
     fournisseur_secondaire_id = Column(Integer, ForeignKey("fournisseurs.id"), nullable=True)
 
-    # Audit
+
     cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     modifie_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date_creation = Column(DateTime, nullable=True)

@@ -80,7 +80,6 @@ def refresh_token(req: RefreshRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="error_token_invalid")
 
     if session.current_jti != payload.get("jti"):
-        # refresh token قديم تم استبداله من قبل — إعادة استعمال = مؤشر سرقة
         session.revoked = True
         db.commit()
         raise HTTPException(status_code=401, detail="error_session_compromised")

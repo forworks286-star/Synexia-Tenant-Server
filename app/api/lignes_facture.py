@@ -22,8 +22,8 @@ class LigneCreateRequest(BaseModel):
     quantite: float
     prix_unitaire: float
     prix_vente: Optional[float] = None
-    date_fabrication: Optional[str] = None  # YYYY-MM-DD
-    date_expiration: Optional[str] = None   # YYYY-MM-DD
+    date_fabrication: Optional[str] = None  
+    date_expiration: Optional[str] = None   
     numero_lot_fournisseur: Optional[str] = None
 
 
@@ -142,8 +142,6 @@ def historique_prix_produit(produit_id: int, db: Session = Depends(get_db),
     )
     historique = [_ligne_to_dict(l) for l in lignes]
 
-    # Seules les factures VALIDÉES comptent dans les moyennes — une facture rejetée
-    # n'a jamais réellement affecté le stock ni les prix.
     achats = [l["prix_unitaire"] for l in historique
               if l["type_facture"] in ("achat", "ajustement_manuel") and l["facture_status"] == "validated"]
     ventes = [l["prix_unitaire"] for l in historique

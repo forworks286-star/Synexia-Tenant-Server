@@ -7,7 +7,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 db = SessionLocal()
 
-# احذف المستخدم القديم إن وجد
+
 db.query(User).filter(User.username == "saadi").delete()
 db.commit()
 

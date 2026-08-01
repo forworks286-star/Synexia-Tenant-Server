@@ -25,8 +25,8 @@ class LigneBOM(Base):
     id = Column(Integer, primary_key=True)
     bom_id = Column(Integer, ForeignKey("boms.id"), nullable=False)
     composant_produit_id = Column(Integer, ForeignKey("produits.id"), nullable=False)
-    quantite_necessaire = Column(Float, nullable=False)  # pour 1 unite de produit fini
-    taux_perte = Column(Float, default=0.0)  # % de perte/gaspillage (0-100)
+    quantite_necessaire = Column(Float, nullable=False) 
+    taux_perte = Column(Float, default=0.0) 
 
     bom = relationship("BOM", back_populates="lignes")
     composant = relationship("Produit", foreign_keys=[composant_produit_id])
@@ -41,9 +41,9 @@ class OrdreFabrication(Base):
     bom_id = Column(Integer, ForeignKey("boms.id"), nullable=False)
     quantite_produite = Column(Float, nullable=False)
     lot_produit_fini_id = Column(Integer, ForeignKey("lots.id"), nullable=True)
-    cout_revient_total = Column(Float, nullable=True)  # calcule automatiquement depuis le PMP des composants
+    cout_revient_total = Column(Float, nullable=True)  
     cout_revient_unitaire = Column(Float, nullable=True)
-    statut = Column(String, default="termine")  # termine | annule
+    statut = Column(String, default="termine") 
     cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date_creation = Column(DateTime, nullable=False)
 

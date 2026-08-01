@@ -22,7 +22,7 @@ def _generate_numero_facture(db: Session) -> str:
     count = db.query(Facture).filter(Facture.numero_facture.like(f"{year}-%")).count()
     return f"{year}-{count + 1:04d}"
 
-# ── Camera Event (équipe IA) ───────────────────────────────────
+
 
 class CameraEventRequest(BaseModel):
     camera_id: str
@@ -69,7 +69,7 @@ async def recevoir_camera_event(
     return {"status": "received", "id": event.id}
 
 
-# ── Face ID / Access Control (équipe IA) ──────────────────────
+
 
 class FaceIdRequest(BaseModel):
     personne_id: Optional[str] = None
@@ -120,7 +120,7 @@ def get_face_events(limit: int = 50, db: Session = Depends(get_db),
     ]}
 
 
-# ── Automation Event (équipe Automatique — payload complet) ──
+
 
 class AutomationHeader(BaseModel):
     schema_version: Optional[str] = None
@@ -320,22 +320,22 @@ def get_latest_automation_per_zone(db: Session = Depends(get_db),
     ]}
 
 
-# ── OCR Result (équipe IA — factures) ─────────────────────────
+
 
 class LigneOcr(BaseModel):
     designation: str
-    type_stock: str  # matiere_premiere | produit_fini | marchandise | consommable — obligatoire
+    type_stock: str 
     quantite: float
     prix_unitaire: float
     prix_vente: Optional[float] = None
-    date_fabrication: Optional[str] = None  # YYYY-MM-DD, lu sur la facture/colis si visible
-    date_expiration: Optional[str] = None   # YYYY-MM-DD
+    date_fabrication: Optional[str] = None  
+    date_expiration: Optional[str] = None   
     numero_lot_fournisseur: Optional[str] = None
 
 
 class OcrResultRequest(BaseModel):
     fournisseur_nom: str
-    type_facture: str = "achat"  # achat | vente
+    type_facture: str = "achat"  
     date: str
     montant_ht: float
     montant_tva: float
@@ -348,7 +348,7 @@ class OcrResultRequest(BaseModel):
     image_url: Optional[str] = None
     raw_json: Dict[str, Any] = {}
     lignes: List[LigneOcr] = []
-    cree_par_id: Optional[int] = None  # utilisateur mobile ayant declenche la photo
+    cree_par_id: Optional[int] = None  
     code_appairage: Optional[str] = None
 
 
@@ -460,7 +460,7 @@ async def recevoir_resultat_ocr(
     return {"status": "received", "id": facture.id, "incoherence_detectee": incoherence}
 
 
-# ── Energie Log simplifié (compatibilité) ─────────────────────
+
 
 class EnergieLogRequest(BaseModel):
     zone: str

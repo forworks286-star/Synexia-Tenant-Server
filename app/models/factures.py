@@ -14,26 +14,26 @@ class Facture(Base):
     montant_ht = Column(Float, default=0.0)
     montant_tva = Column(Float, default=0.0)
     montant_ttc = Column(Float, default=0.0)
-    ppa = Column(Float, nullable=True)  # Prix Public Algérien - pharmacies uniquement
+    ppa = Column(Float, nullable=True)  
     numero_facture = Column(String, nullable=True, unique=True)
     taux_tva = Column(Float, default=19.0)
     fournisseur_nif = Column(String, nullable=True)
     fournisseur_nis = Column(String, nullable=True)
     fournisseur_rc = Column(String, nullable=True)
 
-    statut = Column(String, default="pending")  # pending | validated | rejected
-    type_facture = Column(String, default="achat")  # achat | vente | ajustement_manuel
-    type_stock = Column(String, nullable=True)  # marchandise | matiere_premiere | produit_fini | consommable
+    statut = Column(String, default="pending") 
+    type_facture = Column(String, default="achat")  
+    type_stock = Column(String, nullable=True)  
     image_url = Column(String, nullable=True)
     cree_manuellement = Column(Boolean, default=False)
-    motif_creation_manuelle = Column(String, nullable=True)  # compte-rendu obligatoire si cree_manuellement
+    motif_creation_manuelle = Column(String, nullable=True)  
     motif_rejet = Column(String, nullable=True)
-    cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # proprietaire de la facture (session)
+    cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)  
     a_ete_modifiee = Column(Boolean, default=False)
 
-    # JSON brut complet tel qu'envoyé par l'équipe IA - flexibilité totale pour tout changement de format futur
+    
     ocr_raw_json = Column(JSON, default=dict)
-    incoherence_detectee = Column(Boolean, default=False)  # alerte champ en rouge
+    incoherence_detectee = Column(Boolean, default=False)  
 
     bon_commande_id = Column(Integer, ForeignKey("bons_commande.id"), nullable=True)
     ecarts_bc = Column(JSON, nullable=True)

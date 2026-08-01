@@ -11,7 +11,7 @@ class DemandeModification(Base):
     demandeur_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     compte_rendu = Column(String, nullable=False)
 
-    statut = Column(String, default="pending")  # pending | approuvee | refusee
+    statut = Column(String, default="pending")  
     traite_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     motif_refus = Column(String, nullable=True)
 

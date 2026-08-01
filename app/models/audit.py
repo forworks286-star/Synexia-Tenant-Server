@@ -9,7 +9,7 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=True)
-    action = Column(String, nullable=False)  # created | updated | deleted | login | login_failed
+    action = Column(String, nullable=False)  
     table_cible = Column(String, nullable=False)
     enregistrement_id = Column(Integer, nullable=True)
     valeur_avant = Column(JSON, nullable=True)

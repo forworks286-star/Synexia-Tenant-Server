@@ -14,7 +14,7 @@ class SessionAppairage(Base):
     type_stock = Column(String, nullable=False)
     type_facture = Column(String, default="achat")
     bon_commande_id = Column(Integer, ForeignKey("bons_commande.id"), nullable=True)
-    statut = Column(String, default="attente")  # attente | scanne | complete | expire
+    statut = Column(String, default="attente")  
     facture_id = Column(Integer, ForeignKey("factures.id"), nullable=True)
     date_creation = Column(DateTime, nullable=False)
     date_expiration = Column(DateTime, nullable=False)

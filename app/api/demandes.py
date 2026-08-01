@@ -10,6 +10,7 @@ from ..models.demandes import DemandeModification
 from ..models.factures import Facture
 from ..services.audit_service import enregistrer_audit
 from ..services.alertes_service import creer_alerte
+from ..services.bon_commande_service import liberer_bon_commande_si_lie
 
 router = APIRouter()
 
@@ -115,9 +116,11 @@ async def refuser_demande(demande_id: int, req: RefuserBody, db: Session = Depen
         raise HTTPException(status_code=400, detail="error_demande_deja_traitee")
 
     facture = db.query(Facture).filter(Facture.id == demande.facture_id).first()
+    bc_libere = False
     if facture:
         facture.statut = "rejected"
         facture.motif_rejet = f"Demande de modification refusee : {req.motif_refus}"
+        bc_libere = liberer_bon_commande_si_lie(db, facture)
 
     demande.statut = "refusee"
     demande.motif_refus = req.motif_refus
@@ -133,4 +136,7 @@ async def refuser_demande(demande_id: int, req: RefuserBody, db: Session = Depen
         source="demandes", meta={"facture_id": demande.facture_id, "demande_id": demande.id},
         destinataire_id=demande.demandeur_id,
     )
+    if bc_libere:
+        from ..core.ws_manager import ws_manager
+        await ws_manager.broadcast({"type": "bon_commande_update"})
     return {"status": "ok"}

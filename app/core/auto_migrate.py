@@ -2,11 +2,7 @@ from sqlalchemy import inspect, text
 
 
 def auto_migrate_columns(engine, base):
-    """
-    يقارن أعمدة كل موديل بايثون مع أعمدة قاعدة البيانات الحقيقية.
-    أي عمود موجود بالموديل وناقص بقاعدة البيانات، يُضاف تلقائيًا (ALTER TABLE).
-    يشتغل عند كل تشغيل للسيرفر — بلا حاجة لأي ملف يدوي مستقبلًا.
-    """
+    
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
 
@@ -23,7 +19,7 @@ def auto_migrate_columns(engine, base):
     with engine.connect() as conn:
         for table_name, table in base.metadata.tables.items():
             if table_name not in existing_tables:
-                continue  # جدول جديد بالكامل — create_all يتكفل بيه لحاله
+                continue 
             existing_columns = {c["name"] for c in inspector.get_columns(table_name)}
             for column in table.columns:
                 if column.name in existing_columns:

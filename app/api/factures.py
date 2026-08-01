@@ -11,6 +11,7 @@ from ..models.factures import Facture
 from ..models.lignes_facture import LigneFacture
 from ..services.audit_service import enregistrer_audit
 from ..services.stock_service import appliquer_lignes_facture
+from ..services.bon_commande_service import liberer_bon_commande_si_lie
 
 router = APIRouter()
 
@@ -76,8 +77,8 @@ class LigneManuelleRequest(BaseModel):
 class FactureManuelleRequest(BaseModel):
     fournisseur_nom: str
     date: str
-    type_facture: str = "achat"  # achat | vente
-    type_stock: str  # marchandise | matiere_premiere | produit_fini | consommable
+    type_facture: str = "achat"  
+    type_stock: str  
     montant_ht: float = 0.0
     montant_tva: float = 0.0
     montant_ttc: float = 0.0
@@ -145,16 +146,16 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
 
     if req.bon_commande_id:
         from ..models.bon_commande import BonCommande
-        from sqlalchemy import or_  # <-- AJOUTER CET IMPORT
+        from sqlalchemy import or_  
         from ..services.comparaison_bc import comparer_avec_bc
         
-        # Remplacer la requête simple par une requête avec conditions
+       
         claim = db.query(BonCommande).filter(
             BonCommande.id == req.bon_commande_id,
-            BonCommande.statut.in_(["ouvert", "en_cours"]),  # Statuts autorisés
+            BonCommande.statut.in_(["ouvert", "en_cours"]),  
             or_(
-                BonCommande.reserve_par_id.is_(None),  # Pas réservé
-                BonCommande.reserve_par_id == current_user.id  # Réservé par l'utilisateur actuel
+                BonCommande.reserve_par_id.is_(None),  
+                BonCommande.reserve_par_id == current_user.id  
             )
         ).update({"statut": "recu"})
         db.commit()
@@ -162,7 +163,7 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
         if claim == 0:
             raise HTTPException(status_code=409, detail="error_bon_commande_deja_utilise")
         
-        # Récupérer le BC pour la comparaison
+        
         bc = db.query(BonCommande).filter(BonCommande.id == req.bon_commande_id).first()
         if bc:
             lignes_crees = db.query(LigneFacture).filter(LigneFacture.facture_id == facture.id).all()
@@ -413,9 +414,13 @@ async def rejeter_ecart(facture_id: int, db: Session = Depends(get_db),
         demande_liee.traite_par_id = current_user.id
         demande_liee.date_traitement = datetime.utcnow()
 
+    bc_libere = liberer_bon_commande_si_lie(db, facture)
+
     db.commit()
     await ws_manager.broadcast({"type": "facture_draft_update", "facture_id": facture.id})
     await ws_manager.broadcast({"type": "demande_update"})
+    if bc_libere:
+        await ws_manager.broadcast({"type": "bon_commande_update"})
     return {"status": "ok"}
 
 @router.get("/{facture_id}")
@@ -472,8 +477,13 @@ async def rejeter(facture_id: int, req: RejeterRequest, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="error_motif_requis")
     f.statut = "rejected"
     f.motif_rejet = req.motif.strip()
+
+    bc_libere = liberer_bon_commande_si_lie(db, f)
+
     db.commit()
     enregistrer_audit(db, user_id=current_user.id, action="facture_rejetee",
                       table_cible="factures", enregistrement_id=f.id, apres={"motif": req.motif})
     await ws_manager.broadcast({"type": "facture_update", "id": f.id, "status": "rejected"})
+    if bc_libere:
+        await ws_manager.broadcast({"type": "bon_commande_update"})
     return {"status": "ok"}
