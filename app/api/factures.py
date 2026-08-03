@@ -458,6 +458,7 @@ async def valider(facture_id: int, db: Session = Depends(get_db),
             "type": "stock_update", "produit_id": l.produit_id, "nouvelle_quantite": None,
         })
     await ws_manager.broadcast({"type": "facture_update", "id": f.id, "status": "validated"})
+    await ws_manager.broadcast({"type": "qr_print_queue_update"})
     return {"status": "ok"}
 
 

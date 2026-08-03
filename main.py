@@ -6,7 +6,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
-from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage, bon_commande, iot_zone
+from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage, qr_print_queue, bon_commande, iot_zone
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
 from app.core.auto_migrate import auto_migrate_columns

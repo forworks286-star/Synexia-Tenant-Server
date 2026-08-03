@@ -178,6 +178,9 @@ async def creer_ordre_fabrication(req: OFCreateRequest, db: Session = Depends(ge
                 quantite=int(prise), user_id=current_user.id,
                 source_device="ordre_fabrication", timestamp=datetime.utcnow(),
             ))
+            if lot.quantite_physique <= 0:
+                from ..services.qr_print_queue_service import retirer_de_file_impression
+                retirer_de_file_impression(db, lot.id)
         consommations.append({"produit_id": ligne.composant_produit_id, "quantite": besoin})
 
     produit_fini = bom.produit_fini
@@ -191,6 +194,8 @@ async def creer_ordre_fabrication(req: OFCreateRequest, db: Session = Depends(ge
     )
     db.add(lot_fini)
     db.flush()
+    from ..services.qr_print_queue_service import ajouter_a_file_impression
+    ajouter_a_file_impression(db, lot_fini.id)
     db.add(Mouvement(
         produit_id=produit_fini.id, lot_id=lot_fini.id, type="entree",
         quantite=int(req.quantite_produite), user_id=current_user.id,
@@ -213,6 +218,7 @@ async def creer_ordre_fabrication(req: OFCreateRequest, db: Session = Depends(ge
     await ws_manager.broadcast({"type": "stock_update", "produit_id": produit_fini.id, "nouvelle_quantite": None})
     for c in consommations:
         await ws_manager.broadcast({"type": "stock_update", "produit_id": c["produit_id"], "nouvelle_quantite": None})
+    await ws_manager.broadcast({"type": "qr_print_queue_update"})
 
     return {
         "id": of.id, "numero_of": of.numero_of, "quantite_produite": of.quantite_produite,

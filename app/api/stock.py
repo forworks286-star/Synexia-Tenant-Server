@@ -304,6 +304,9 @@ async def enregistrer_mouvement(req: MouvementRequest, db: Session = Depends(get
         lot.quantite_physique += req.quantite
     else:
         lot.quantite_physique -= req.quantite
+        if lot.quantite_physique <= 0:
+            from ..models.qr_print_queue import FileImpressionQr
+            db.query(FileImpressionQr).filter(FileImpressionQr.lot_id == lot.id).delete()
     lot.date_dernier_mouvement = datetime.utcnow()
     if req.type == "entree" and not lot.date_entree_stock:
         lot.date_entree_stock = datetime.utcnow()
@@ -451,16 +454,65 @@ def rejeter_commande(commande_id: int, db: Session = Depends(get_db),
 @router.get("/lots/{lot_id}/qr")
 def qr_code_lot(lot_id: int, db: Session = Depends(get_db),
                  current_user=Depends(get_current_user)):
-    """Genere une image PNG imprimable du QR code d'un lot — a coller sur les cartons."""
+    """Genere une image PNG imprimable du QR code d'un lot — a coller sur les cartons.
+    Contenu lisible directement par n'importe quel appareil photo, sans application."""
     lot = db.query(Lot).filter(Lot.id == lot_id).first()
     if not lot:
         raise HTTPException(status_code=404, detail="error_lot_not_found")
-    contenu = f"SYNEXIA-LOT:{lot.id}:{lot.numero_lot}"
+    produit = db.query(Produit).filter(Produit.id == lot.produit_id).first()
+    contenu = (
+        f"Produit: {produit.nom if produit else '—'}\n"
+        f"Lot: {lot.numero_lot or lot.id}\n"
+        f"Emplacement: {lot.emplacement or 'non defini'}"
+    )
     img = qrcode.make(contenu)
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
     return StreamingResponse(buffer, media_type="image/png")
+
+
+@router.get("/qr-a-imprimer")
+def get_qr_a_imprimer(db: Session = Depends(get_db),
+                       current_user=Depends(get_current_user)):
+    from ..models.qr_print_queue import FileImpressionQr
+    from ..models.bom import OrdreFabrication
+    items = db.query(FileImpressionQr).order_by(FileImpressionQr.id.desc()).all()
+    resultats = []
+    for f in items:
+        lot = f.lot
+        if not lot:
+            continue
+        if current_user.role not in ("admin", "manager"):
+            proprietaire_id = None
+            if lot.facture_id and lot.facture:
+                proprietaire_id = lot.facture.cree_par_id
+            else:
+                of = db.query(OrdreFabrication).filter(OrdreFabrication.lot_produit_fini_id == lot.id).first()
+                if of:
+                    proprietaire_id = of.cree_par_id
+            if proprietaire_id != current_user.id:
+                continue
+        resultats.append({
+            "id": f.id, "lot_id": lot.id,
+            "produit_nom": lot.produit.nom if lot.produit else "—",
+            "numero_lot": lot.numero_lot, "emplacement": lot.emplacement,
+            "date_ajout": f.date_ajout.isoformat() + "Z",
+        })
+    return {"results": resultats}
+
+
+@router.delete("/qr-a-imprimer/{item_id}")
+async def supprimer_qr_a_imprimer(item_id: int, db: Session = Depends(get_db),
+                                   current_user=Depends(get_current_user)):
+    from ..models.qr_print_queue import FileImpressionQr
+    item = db.query(FileImpressionQr).filter(FileImpressionQr.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="error_not_found")
+    db.delete(item)
+    db.commit()
+    await ws_manager.broadcast({"type": "qr_print_queue_update"})
+    return {"status": "ok"}
 
 
 @router.get("/produits/{produit_id}/lot-suggere")

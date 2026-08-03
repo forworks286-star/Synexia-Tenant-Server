@@ -114,6 +114,8 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
             db.flush()
             if ligne.prix_vente:
                 produit.prix_vente = ligne.prix_vente
+            from .qr_print_queue_service import ajouter_a_file_impression
+            ajouter_a_file_impression(db, lot.id)
             db.add(Mouvement(
                 produit_id=produit.id, lot_id=lot.id, type="entree",
                 quantite=int(ligne.quantite), user_id=current_user.id,
@@ -138,5 +140,8 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
                     quantite=prise, user_id=current_user.id,
                     source_device="facture", timestamp=datetime.utcnow(),
                 ))
+                if lot.quantite_physique <= 0:
+                    from .qr_print_queue_service import retirer_de_file_impression
+                    retirer_de_file_impression(db, lot.id)
 
 
