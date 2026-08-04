@@ -1,11 +1,3 @@
-import io
-import qrcode
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, joinedload
-from datetime import datetime
-from pydantic import BaseModel
-from typing import Optional
 
 from ..core.database import get_db
 from ..core.security import get_current_user, require_role

@@ -1,7 +1,4 @@
-import re
-from datetime import datetime
-from sqlalchemy.orm import Session
-from fastapi import HTTPException
+
 
 from ..models.produits import Produit, Lot
 from ..models.factures import Facture

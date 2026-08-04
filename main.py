@@ -1,9 +1,3 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 from app.core.database import Base, engine
 from app.models import users as users_model, auth_sessions, lignes_facture, demandes, bom, appairage, qr_print_queue, bon_commande, iot_zone
@@ -87,3 +81,4 @@ async def websocket_alertes(websocket: WebSocket, token: str | None = None):
             await websocket.receive_text()
     except WebSocketDisconnect:
         await ws_manager.disconnect(websocket)
+
