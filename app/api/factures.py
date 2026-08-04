@@ -1,4 +1,9 @@
 
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
 
 from ..core.database import get_db
 from ..core.security import get_current_user, require_role
@@ -59,6 +64,7 @@ class LigneManuelleRequest(BaseModel):
     designation: Optional[str] = None
     quantite: float
     prix_unitaire: float
+    prix_total_ligne: Optional[float] = None
     prix_vente: Optional[float] = None
     date_fabrication: Optional[str] = None
     date_expiration: Optional[str] = None
@@ -125,17 +131,18 @@ async def creer_facture_manuelle(req: FactureManuelleRequest, db: Session = Depe
         date_manquante = req.type_facture != "vente" and not l.date_expiration
         if date_manquante:
             date_manquante_globale = True
+        prix_unitaire_effectif = (l.prix_total_ligne / l.quantite) if (l.prix_total_ligne and l.quantite) else l.prix_unitaire
         db.add(LigneFacture(
             facture_id=facture.id, produit_id=produit_id,
             designation_brute=l.designation, type_stock=req.type_stock,
-            quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+            quantite=l.quantite, prix_unitaire=round(prix_unitaire_effectif, 4), prix_vente=l.prix_vente,
             date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
             date_expiration_manquante="true" if date_manquante else "false",
             numero_lot_fournisseur=l.numero_lot_fournisseur,
             nouveau_categorie=l.nouveau_categorie, nouveau_code_barre=l.nouveau_code_barre,
             nouveau_unite_mesure=l.nouveau_unite_mesure, nouveau_seuil_critique=l.nouveau_seuil_critique,
             nouveau_emplacement=l.nouveau_emplacement,
-            montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="manuel",
+            montant_ligne=round(l.quantite * prix_unitaire_effectif, 2), source="manuel",
         ))
     db.commit()
     db.refresh(facture)
@@ -255,14 +262,15 @@ async def completer_modification(facture_id: int, req: CompleterModificationRequ
             trouve = trouver_produit_correspondant(db, l.designation)
             if trouve:
                 produit_id = trouve.id
+        prix_unitaire_effectif = (l.prix_total_ligne / l.quantite) if (l.prix_total_ligne and l.quantite) else l.prix_unitaire
         db.add(LigneFacture(
             facture_id=facture.id, produit_id=produit_id,
             designation_brute=l.designation, type_stock=facture.type_stock,
-            quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+            quantite=l.quantite, prix_unitaire=round(prix_unitaire_effectif, 4), prix_vente=l.prix_vente,
             date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
             date_expiration_manquante="false" if l.date_expiration else "true",
             numero_lot_fournisseur=l.numero_lot_fournisseur,
-            montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="manuel",
+            montant_ligne=round(l.quantite * prix_unitaire_effectif, 2), source="manuel",
         ))
     db.commit()
     enregistrer_audit(db, user_id=current_user.id, action="facture_modification_completee",

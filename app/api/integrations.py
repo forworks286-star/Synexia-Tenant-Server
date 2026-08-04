@@ -327,6 +327,7 @@ class LigneOcr(BaseModel):
     type_stock: str 
     quantite: float
     prix_unitaire: float
+    prix_total_ligne: Optional[float] = None  
     prix_vente: Optional[float] = None
     date_fabrication: Optional[str] = None  
     date_expiration: Optional[str] = None   
@@ -383,15 +384,16 @@ async def recevoir_resultat_ocr(
             date_manquante = req.type_facture != "vente" and not l.date_expiration
             if date_manquante:
                 date_manquante_globale = True
+            prix_unitaire_effectif = (l.prix_total_ligne / l.quantite) if (l.prix_total_ligne and l.quantite) else l.prix_unitaire
             db.add(LigneFacture(
                 facture_id=facture.id,
                 produit_id=produit_existant.id if produit_existant else None,
                 designation_brute=l.designation, type_stock=l.type_stock,
-                quantite=l.quantite, prix_unitaire=l.prix_unitaire, prix_vente=l.prix_vente,
+                quantite=l.quantite, prix_unitaire=round(prix_unitaire_effectif, 4), prix_vente=l.prix_vente,
                 date_fabrication=l.date_fabrication, date_expiration=l.date_expiration,
                 date_expiration_manquante="true" if date_manquante else "false",
                 numero_lot_fournisseur=l.numero_lot_fournisseur,
-                montant_ligne=round(l.quantite * l.prix_unitaire, 2), source="ocr",
+                montant_ligne=round(l.quantite * prix_unitaire_effectif, 2), source="ocr",
             ))
         db.commit()
 

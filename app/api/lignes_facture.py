@@ -21,6 +21,7 @@ class LigneCreateRequest(BaseModel):
     type_stock: Optional[str] = None
     quantite: float
     prix_unitaire: float
+    prix_total_ligne: Optional[float] = None
     prix_vente: Optional[float] = None
     date_fabrication: Optional[str] = None  
     date_expiration: Optional[str] = None   
@@ -78,15 +79,16 @@ async def ajouter_ligne(facture_id: int, req: LigneCreateRequest, db: Session = 
 
     produit = db.query(Produit).filter(Produit.id == produit_id).first() if produit_id else None
     date_manquante = facture.type_facture != "vente" and not req.date_expiration
+    prix_unitaire_effectif = (req.prix_total_ligne / req.quantite) if (req.prix_total_ligne and req.quantite) else req.prix_unitaire
     ligne = LigneFacture(
         facture_id=facture_id, produit_id=produit_id,
         designation_brute=produit.nom if produit else req.designation,
         type_stock=req.type_stock,
-        quantite=req.quantite, prix_unitaire=req.prix_unitaire, prix_vente=req.prix_vente,
+        quantite=req.quantite, prix_unitaire=round(prix_unitaire_effectif, 4), prix_vente=req.prix_vente,
         date_fabrication=req.date_fabrication, date_expiration=req.date_expiration,
         date_expiration_manquante="true" if date_manquante else "false",
         numero_lot_fournisseur=req.numero_lot_fournisseur,
-        montant_ligne=round(req.quantite * req.prix_unitaire, 2), source="manuel",
+        montant_ligne=round(req.quantite * prix_unitaire_effectif, 2), source="manuel",
     )
     db.add(ligne)
     db.commit()

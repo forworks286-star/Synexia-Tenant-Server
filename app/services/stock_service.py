@@ -3,6 +3,8 @@
 from ..models.produits import Produit, Lot
 from ..models.factures import Facture
 from ..models.mouvements import Mouvement
+from sqlalchemy.orm import Session
+
 
 
 def _normaliser(nom: str) -> str:
@@ -109,6 +111,21 @@ def appliquer_lignes_facture(db: Session, facture: Facture, lignes: list, curren
             )
             db.add(lot)
             db.flush()
+
+            # Prix Moyen Pondere (WAC) — recalcule a CHAQUE achat, meme produit existant.
+            stock_avant = sum(
+                l.quantite_physique for l in db.query(Lot).filter(
+                    Lot.produit_id == produit.id, Lot.id != lot.id
+                ).all()
+            )
+            valeur_avant = (produit.prix_moyen_pondere or 0.0) * stock_avant
+            valeur_achat = ligne.prix_unitaire * int(ligne.quantite)
+            quantite_totale = stock_avant + int(ligne.quantite)
+            if quantite_totale > 0:
+                produit.prix_moyen_pondere = round((valeur_avant + valeur_achat) / quantite_totale, 4)
+            if not produit.prix_achat:
+                produit.prix_achat = ligne.prix_unitaire
+
             if ligne.prix_vente:
                 produit.prix_vente = ligne.prix_vente
             from .qr_print_queue_service import ajouter_a_file_impression
